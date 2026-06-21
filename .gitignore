@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.vscode/
+build/
+firmware/build_by_vscode/
+twister-out/
+*.hex
+*.elf
+*.map

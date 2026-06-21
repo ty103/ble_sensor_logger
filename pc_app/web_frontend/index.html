@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BLE Sensor Logger</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>BLE Sensor Logger</h1>
+      <p id="connectionLabel">Disconnected</p>
+    </div>
+    <div class="header-actions">
+      <button id="scanButton" class="secondary">Scan</button>
+      <button id="disconnectButton" class="danger" disabled>Disconnect</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="connection-band">
+      <label for="deviceSelect">Device</label>
+      <select id="deviceSelect">
+        <option value="">Scan for devices</option>
+      </select>
+      <button id="connectButton" disabled>Connect</button>
+    </section>
+
+    <section class="control-band">
+      <div class="command-group">
+        <button id="startButton" disabled>Start</button>
+        <button id="stopButton" class="secondary" disabled>Stop</button>
+        <button id="resetButton" class="secondary" disabled>Reset sequence</button>
+      </div>
+      <div class="interval-control">
+        <label for="streamSelect">Stream</label>
+        <select id="streamSelect"></select>
+        <label for="intervalInput">Interval</label>
+        <input id="intervalInput" type="number" min="20" max="10000" step="10" value="100">
+        <span>ms</span>
+        <button id="applyIntervalButton" class="secondary" disabled>Apply</button>
+      </div>
+    </section>
+
+    <section id="metricsGrid" class="metrics-grid" aria-label="Latest sensor values"></section>
+
+    <section class="chart-section">
+      <div class="chart-toolbar">
+        <div>
+          <h2>Realtime graphs</h2>
+          <p><span id="sampleCount">0</span> samples · <span id="missedCount">0</span> missed</p>
+        </div>
+        <div class="chart-controls">
+          <button id="clearButton" class="secondary">Clear</button>
+          <button id="csvButton" class="secondary">Start CSV log</button>
+          <span id="csvState" class="recording-state">Not recording</span>
+        </div>
+      </div>
+      <div id="graphsGrid" class="graphs-grid" aria-label="Realtime sensor graphs">
+        <article class="graph-panel" data-graph-index="0">
+          <div class="graph-panel-header">
+            <label><input type="checkbox" data-role="graph-enabled" checked> Graph 1</label>
+            <span data-role="graph-summary">--</span>
+          </div>
+          <details class="graph-options" open>
+            <summary>Controls</summary>
+            <div class="graph-settings">
+              <div class="signal-selects" data-role="metric-selects"></div>
+              <fieldset>
+                <legend>Y range</legend>
+                <label><input type="radio" name="graph0YMode" value="auto" data-role="y-mode" checked> Auto</label>
+                <label><input type="radio" name="graph0YMode" value="manual" data-role="y-mode"> Manual</label>
+                <input type="number" step="any" data-role="y-min" placeholder="Min" disabled>
+                <input type="number" step="any" data-role="y-max" placeholder="Max" disabled>
+              </fieldset>
+              <fieldset>
+                <legend>X range</legend>
+                <label><input type="radio" name="graph0XMode" value="auto" data-role="x-mode" checked> Auto</label>
+                <label><input type="radio" name="graph0XMode" value="seconds" data-role="x-mode"> Seconds</label>
+                <input type="number" min="1" step="1" value="30" data-role="x-seconds" disabled>
+              </fieldset>
+            </div>
+          </details>
+          <canvas data-role="graph-canvas" aria-label="Realtime sensor graph 1"></canvas>
+        </article>
+        <article class="graph-panel" data-graph-index="1">
+          <div class="graph-panel-header">
+            <label><input type="checkbox" data-role="graph-enabled"> Graph 2</label>
+            <span data-role="graph-summary">Disabled</span>
+          </div>
+          <details class="graph-options" open>
+            <summary>Controls</summary>
+            <div class="graph-settings">
+              <div class="signal-selects" data-role="metric-selects"></div>
+              <fieldset>
+                <legend>Y range</legend>
+                <label><input type="radio" name="graph1YMode" value="auto" data-role="y-mode" checked> Auto</label>
+                <label><input type="radio" name="graph1YMode" value="manual" data-role="y-mode"> Manual</label>
+                <input type="number" step="any" data-role="y-min" placeholder="Min" disabled>
+                <input type="number" step="any" data-role="y-max" placeholder="Max" disabled>
+              </fieldset>
+              <fieldset>
+                <legend>X range</legend>
+                <label><input type="radio" name="graph1XMode" value="auto" data-role="x-mode" checked> Auto</label>
+                <label><input type="radio" name="graph1XMode" value="seconds" data-role="x-mode"> Seconds</label>
+                <input type="number" min="1" step="1" value="30" data-role="x-seconds" disabled>
+              </fieldset>
+            </div>
+          </details>
+          <canvas data-role="graph-canvas" aria-label="Realtime sensor graph 2"></canvas>
+        </article>
+        <article class="graph-panel" data-graph-index="2">
+          <div class="graph-panel-header">
+            <label><input type="checkbox" data-role="graph-enabled"> Graph 3</label>
+            <span data-role="graph-summary">Disabled</span>
+          </div>
+          <details class="graph-options" open>
+            <summary>Controls</summary>
+            <div class="graph-settings">
+              <div class="signal-selects" data-role="metric-selects"></div>
+              <fieldset>
+                <legend>Y range</legend>
+                <label><input type="radio" name="graph2YMode" value="auto" data-role="y-mode" checked> Auto</label>
+                <label><input type="radio" name="graph2YMode" value="manual" data-role="y-mode"> Manual</label>
+                <input type="number" step="any" data-role="y-min" placeholder="Min" disabled>
+                <input type="number" step="any" data-role="y-max" placeholder="Max" disabled>
+              </fieldset>
+              <fieldset>
+                <legend>X range</legend>
+                <label><input type="radio" name="graph2XMode" value="auto" data-role="x-mode" checked> Auto</label>
+                <label><input type="radio" name="graph2XMode" value="seconds" data-role="x-mode"> Seconds</label>
+                <input type="number" min="1" step="1" value="30" data-role="x-seconds" disabled>
+              </fieldset>
+            </div>
+          </details>
+          <canvas data-role="graph-canvas" aria-label="Realtime sensor graph 3"></canvas>
+        </article>
+      </div>
+    </section>
+
+    <section class="status-band">
+      <div><span>State</span><strong id="deviceState">--</strong></div>
+      <div><span>Interval</span><strong id="statusInterval">--</strong></div>
+      <div><span>Last error</span><strong id="lastError">--</strong></div>
+      <div><span>LSM6DSL</span><strong id="lsm6dslError">--</strong></div>
+      <div><span>HTS221</span><strong id="hts221Error">--</strong></div>
+      <div><span>LPS22HB</span><strong id="lps22hbError">--</strong></div>
+      <div><span>LSM303AGR Mag</span><strong id="lsm303agrMagnError">--</strong></div>
+      <div><span>Connections</span><strong id="connectionCount">--</strong></div>
+      <button id="refreshStatusButton" class="secondary" disabled>Refresh status</button>
+    </section>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

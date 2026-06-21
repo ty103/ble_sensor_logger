@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ble-sensor-logger"
+version = "0.1.0"
+description = "Python BLE central app for the BLE Sensor Logger firmware"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.11",
+    "bleak>=0.22",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[project.scripts]
+ble-sensor-logger = "ble_sensor_logger.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

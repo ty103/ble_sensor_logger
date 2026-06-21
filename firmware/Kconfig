@@ -1,0 +1,15 @@
+source "Kconfig.zephyr"
+
+menu "BLE Sensor Logger"
+
+config BSL_IKS01A2_I2C_PROBE
+	bool "Enable X-NUCLEO-IKS01A2 I2C probe logging"
+	depends on I2C && SENSOR
+	default n
+	help
+	  Enable boot-time sensor API checks and periodic raw WHO_AM_I reads on
+	  the X-NUCLEO-IKS01A2 Arduino I2C bus. This is intended for bring-up,
+	  logic analyzer, and RTT/VCOM diagnostics, not for normal streaming
+	  firmware.
+
+endmenu
