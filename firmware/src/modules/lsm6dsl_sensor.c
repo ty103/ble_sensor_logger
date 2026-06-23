@@ -723,6 +723,9 @@ void lsm6dsl_sensor_set_gyro_calib_threshold_mdps(uint16_t threshold_mdps)
 
 void lsm6dsl_sensor_set_gyro_calib_alpha_permille(uint16_t alpha_permille)
 {
+	if (alpha_permille > 1000U) {
+		alpha_permille = 1000U;
+	}
 	calib_alpha_permille = alpha_permille;
 }
 
