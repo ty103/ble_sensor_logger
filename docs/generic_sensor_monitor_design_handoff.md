@@ -653,9 +653,10 @@ codex/webgui-capability-driven
      - [ ] `pc_app/src/ble_sensor_logger/web_api.py` にfield metadataを追加し、角度はdegree表示、合成加速度はmg表示にscaleする。
      - [ ] CUI表示、BLE smoke、negative smoke、protocol/web/app_core pytestを更新する。
    - WebGUI task:
-     - [ ] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
-     - [ ] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
-     - [ ] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
+     - [x] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
+     - [x] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
+     - [x] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
+     - [ ] 統合後、実backendからの `/api/capability` と WebSocket sampleで `stream_id=13` の最新値、graph、CSV列、3D cuboidが更新されることを実ブラウザで確認する。
    - 検証task:
      - [ ] `pc_app/` で `uv run --extra dev pytest` を実行する。
      - [ ] Web frontendの構文確認を行う。
@@ -755,5 +756,6 @@ codex/webgui-capability-driven
 - 2026-06-21: Config v4 `SET_STREAM_INTERVAL` を `stream_id=1` で実装し、Firmware build / flash / BLE smoke / negative smokeで確認済み。
 - 2026-06-21: `stream_id=1` を `DUMMY_ACCEL3_INT16_V1` へ整理し、dummy batteryとA0 ADCをactive pathから削除。PC自動テスト / Firmware build / flash / BLE smoke / negative smokeで確認済み。
 - 2026-06-23: WebGUIのinterval表示を全streamへ広げ、`DUMMY_ACCEL3` はEditable、実センサstreamはFixedとして表示するよう更新。PC自動テストで確認済み。
+- 2026-06-23: `stream_id=13` WebGUI taskとして、fallback Capability、最新値/graph/CSVのorientation field、local Three.jsによる3D cuboid viewを追加。統合後の実backend + 実ブラウザ確認は未実施。
 
 過去履歴内の `次作業` は当時のメモであり、現在の優先順位は `現在の残課題 / 次回作業キュー` を正とする。
