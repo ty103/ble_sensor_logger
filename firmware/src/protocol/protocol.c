@@ -115,6 +115,7 @@ int bsl_control_unpack(const uint8_t *buf, size_t len, struct bsl_control *paylo
 	case BSL_COMMAND_STOP_MEASUREMENT:
 	case BSL_COMMAND_REQUEST_STATUS:
 	case BSL_COMMAND_RESET_SEQUENCE:
+	case BSL_COMMAND_FORCE_GYRO_CALIB:
 		return 0;
 	default:
 		return -ENOTSUP;
@@ -202,6 +203,25 @@ bool bsl_config_is_valid(const struct bsl_config *payload)
 		}
 		return true;
 	}
+	if (payload->op == BSL_CONFIG_OP_SET_GYRO_CALIB_THRESHOLD ||
+	    payload->op == BSL_CONFIG_OP_SET_GYRO_CALIB_ALPHA ||
+	    payload->op == BSL_CONFIG_OP_SET_GYRO_CALIB_WINDOW) {
+		if (payload->stream_id != BSL_STREAM_ID_LSM6DSL_IMU6) {
+			return false;
+		}
+		switch (payload->op) {
+		case BSL_CONFIG_OP_SET_GYRO_CALIB_THRESHOLD:
+			return payload->sample_interval_ms >= 10U &&
+			       payload->sample_interval_ms <= 1000U;
+		case BSL_CONFIG_OP_SET_GYRO_CALIB_ALPHA:
+			return payload->sample_interval_ms <= 1000U;
+		case BSL_CONFIG_OP_SET_GYRO_CALIB_WINDOW:
+			return payload->sample_interval_ms >= 5U &&
+			       payload->sample_interval_ms <= 260U;
+		default:
+			return false;
+		}
+	}
 	if (payload->stream_id != BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION) {
 		return false;
 	}
@@ -246,7 +266,8 @@ void bsl_capability_default(struct bsl_capability *payload)
 	payload->header.supported_commands = (1U << BSL_COMMAND_START_MEASUREMENT) |
 					     (1U << BSL_COMMAND_STOP_MEASUREMENT) |
 					     (1U << BSL_COMMAND_REQUEST_STATUS) |
-					     (1U << BSL_COMMAND_RESET_SEQUENCE);
+					     (1U << BSL_COMMAND_RESET_SEQUENCE) |
+					     (1U << BSL_COMMAND_FORCE_GYRO_CALIB);
 	payload->header.supported_features = BSL_CAPABILITY_FEATURE_INTERVAL_CONFIG |
 					     BSL_CAPABILITY_FEATURE_STATUS_READ |
 					     BSL_CAPABILITY_FEATURE_SENSOR_NOTIFY;
