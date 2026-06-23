@@ -14,14 +14,14 @@
 基本ビルド：
 ```bash
 source .env
-west build -b nrf52840dk/nrf52840 firmware --build-dir build --pristine
+west build -b nrf52840dk/nrf52840 . --build-dir build --pristine
 west flash --build-dir build
 ```
 
 X-NUCLEO-IKS01A2 接続時：
 ```bash
 source .env
-west build -b nrf52840dk/nrf52840 firmware --build-dir build --pristine --shield x_nucleo_iks01a2
+west build -b nrf52840dk/nrf52840 . --build-dir build --pristine --shield x_nucleo_iks01a2
 west flash --build-dir build
 ```
 

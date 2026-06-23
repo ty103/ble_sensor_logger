@@ -6,6 +6,10 @@ BLE Sensor Logger Firmware のビルド手順。
 
 ---
 
+## 環境変数ファイルの準備
+
+`firmware/.env.template`を参考に、`firmware/.env`を作成しておくこと
+
 ## 基本ビルド（センサ無し）
 
 疑似加速度のみを使う場合：

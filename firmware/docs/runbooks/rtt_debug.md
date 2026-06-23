@@ -13,6 +13,10 @@ BLE Sensor Logger Firmware の RTT ログ取得手順。
 - `JLinkRTTLogger` コマンド（SEGGER ツール）
 - `nrfutil` コマンド
 
+### 環境変数ファイルの準備
+
+`firmware/.env.template`を参考に、`firmware/.env`を作成しておくこと。
+
 ---
 
 ## スクリプトによる RTT 取得（推奨）

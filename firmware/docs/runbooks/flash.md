@@ -7,6 +7,10 @@ BLE Sensor Logger Firmware のフラッシュ手順。
 
 ---
 
+## 環境変数ファイルの準備
+
+`firmware/.env.template`を参考に、`firmware/.env`を作成しておくこと。
+
 ## 単一デバイス環境（デフォルト）
 
 ```bash
