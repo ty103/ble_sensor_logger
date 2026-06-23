@@ -9,6 +9,7 @@ from ble_sensor_logger.protocol import (
     SENSOR_HTS221_SAMPLE_SIZE,
     SENSOR_IMU6_SAMPLE_SIZE,
     SENSOR_MAG3_SAMPLE_SIZE,
+    SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
     CapabilityPayload,
     DeviceError,
     DeviceState,
@@ -190,16 +191,21 @@ def test_capability_response_uses_stream_metadata():
         assert '"stream_type": "TEMP_HUMIDITY"' in body
         assert '"stream_type": "PRESSURE"' in body
         assert '"stream_type": "MAG3"' in body
+        assert '"stream_type": "ORIENTATION_MOTION"' in body
         assert '"payload_format": "DUMMY_ACCEL3_INT16_V1"' in body
         assert '"payload_format": "IMU6_INT16_V1"' in body
         assert '"payload_format": "HTS221_TEMP_HUMIDITY_INT16_V1"' in body
         assert '"payload_format": "LPS22HB_PRESSURE_INT32_V1"' in body
         assert '"payload_format": "MAG3_INT16_V1"' in body
+        assert '"payload_format": "ORIENTATION_MOTION_INT16_V1"' in body
         assert '"fields": [' in body
         assert '"label": "Dummy Accel Z"' in body
         assert '"label": "LSM6DSL Accel Z"' in body
         assert '"label": "LSM303AGR Mag Z"' in body
+        assert '"label": "LSM6DSL Pitch Filtered"' in body
+        assert '"field": "accel_norm_mg"' in body
         assert '"unit": "%RH"' in body
+        assert '"unit": "degree"' in body
         assert '"scale": 0.01' in body
 
     asyncio.run(run())
@@ -353,3 +359,32 @@ def test_web_sample_json_marks_fields_outside_payload_as_null():
     assert mag3["mag_z_ut"] == 42
     assert mag3["accel_z_mg"] is None
     assert mag3["pressure_pa"] is None
+
+    orientation = backend._sample_to_dict(
+        SensorDataPayload(
+            version=3,
+            message_type=MessageType.SENSOR_SAMPLE,
+            stream_id=13,
+            flags=0,
+            sequence=1,
+            timestamp_ms=104,
+            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+            payload_len=SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
+            accel_x_mg=0,
+            accel_y_mg=0,
+            accel_z_mg=0,
+            pitch_naive_cdeg=-1234,
+            roll_naive_cdeg=567,
+            zenith_naive_cdeg=9012,
+            pitch_filtered_cdeg=-1200,
+            roll_filtered_cdeg=600,
+            zenith_filtered_cdeg=9000,
+            accel_norm_mg=1001,
+        )
+    )
+    assert orientation["pitch_naive_cdeg"] == -1234
+    assert orientation["roll_filtered_cdeg"] == 600
+    assert orientation["accel_norm_mg"] == 1001
+    assert orientation["accel_z_mg"] is None
+    assert orientation["mag_z_ut"] is None
+    assert orientation["pressure_pa"] is None

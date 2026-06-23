@@ -17,6 +17,7 @@ MIN_INTERVAL_MS = 20
 MAX_INTERVAL_MS = 10_000
 STREAM_ID_DUMMY_ACCEL3 = 1
 STREAM_ID_LSM6DSL_IMU6 = 10
+STREAM_ID_LSM6DSL_ORIENTATION_MOTION = 13
 STREAM_ID_LSM303AGR_MAG3 = 12
 STREAM_ID_LPS22HB_PRESSURE = 20
 STREAM_ID_HTS221_TEMP_HUMIDITY = 30
@@ -28,6 +29,7 @@ HTS221_INTERVAL_MS = 1000
 SENSOR_DATA_HEADER_FORMAT = "<BBBBHIBB"
 SENSOR_DUMMY_ACCEL3_SAMPLE_FORMAT = "<hhh"
 SENSOR_IMU6_SAMPLE_FORMAT = "<hhhhhh"
+SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT = "<hhhhhhh"
 SENSOR_MAG3_SAMPLE_FORMAT = "<hhh"
 SENSOR_HTS221_SAMPLE_FORMAT = "<hh"
 SENSOR_LPS22HB_SAMPLE_FORMAT = "<i"
@@ -41,6 +43,7 @@ CAPABILITY_STREAM_FORMAT = "<BBBBBBHHHHbB"
 SENSOR_DATA_HEADER_SIZE = struct.calcsize(SENSOR_DATA_HEADER_FORMAT)
 SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE = struct.calcsize(SENSOR_DUMMY_ACCEL3_SAMPLE_FORMAT)
 SENSOR_IMU6_SAMPLE_SIZE = struct.calcsize(SENSOR_IMU6_SAMPLE_FORMAT)
+SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE = struct.calcsize(SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT)
 SENSOR_MAG3_SAMPLE_SIZE = struct.calcsize(SENSOR_MAG3_SAMPLE_FORMAT)
 SENSOR_HTS221_SAMPLE_SIZE = struct.calcsize(SENSOR_HTS221_SAMPLE_FORMAT)
 SENSOR_LPS22HB_SAMPLE_SIZE = struct.calcsize(SENSOR_LPS22HB_SAMPLE_FORMAT)
@@ -114,6 +117,7 @@ class StreamType(IntEnum):
     TEMP_HUMIDITY = 3
     PRESSURE = 4
     MAG3 = 5
+    ORIENTATION_MOTION = 6
 
 
 class StreamDataType(IntEnum):
@@ -134,6 +138,7 @@ class PayloadFormat(IntEnum):
     HTS221_TEMP_HUMIDITY_INT16_V1 = 3
     LPS22HB_PRESSURE_INT32_V1 = 4
     MAG3_INT16_V1 = 5
+    ORIENTATION_MOTION_INT16_V1 = 6
 
 
 class StreamFlag(IntEnum):
@@ -163,6 +168,13 @@ class SensorDataPayload:
     mag_x_ut: int = 0
     mag_y_ut: int = 0
     mag_z_ut: int = 0
+    pitch_naive_cdeg: int = 0
+    roll_naive_cdeg: int = 0
+    zenith_naive_cdeg: int = 0
+    pitch_filtered_cdeg: int = 0
+    roll_filtered_cdeg: int = 0
+    zenith_filtered_cdeg: int = 0
+    accel_norm_mg: int = 0
 
     @classmethod
     def unpack(cls, data: bytes | bytearray | memoryview) -> "SensorDataPayload":
@@ -288,6 +300,41 @@ class SensorDataPayload:
                 mag_y_ut=mag_y_ut,
                 mag_z_ut=mag_z_ut,
             )
+        elif payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1:
+            if payload_len != SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE:
+                raise ProtocolError(
+                    "ORIENTATION_MOTION payload_len must be "
+                    f"{SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE}, got {payload_len}"
+                )
+            (
+                pitch_naive_cdeg,
+                roll_naive_cdeg,
+                zenith_naive_cdeg,
+                pitch_filtered_cdeg,
+                roll_filtered_cdeg,
+                zenith_filtered_cdeg,
+                accel_norm_mg,
+            ) = struct.unpack(SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT, payload_raw)
+            payload = cls(
+                version=version,
+                message_type=message_type,
+                stream_id=stream_id,
+                flags=flags,
+                sequence=sequence,
+                timestamp_ms=timestamp_ms,
+                payload_format=payload_format,
+                payload_len=payload_len,
+                accel_x_mg=0,
+                accel_y_mg=0,
+                accel_z_mg=0,
+                pitch_naive_cdeg=pitch_naive_cdeg,
+                roll_naive_cdeg=roll_naive_cdeg,
+                zenith_naive_cdeg=zenith_naive_cdeg,
+                pitch_filtered_cdeg=pitch_filtered_cdeg,
+                roll_filtered_cdeg=roll_filtered_cdeg,
+                zenith_filtered_cdeg=zenith_filtered_cdeg,
+                accel_norm_mg=accel_norm_mg,
+            )
         elif payload_format == PayloadFormat.LPS22HB_PRESSURE_INT32_V1:
             if payload_len != SENSOR_LPS22HB_SAMPLE_SIZE:
                 raise ProtocolError(
@@ -356,6 +403,17 @@ class SensorDataPayload:
                 self.mag_y_ut,
                 self.mag_z_ut,
             )
+        if self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1:
+            return header + struct.pack(
+                SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT,
+                self.pitch_naive_cdeg,
+                self.roll_naive_cdeg,
+                self.zenith_naive_cdeg,
+                self.pitch_filtered_cdeg,
+                self.roll_filtered_cdeg,
+                self.zenith_filtered_cdeg,
+                self.accel_norm_mg,
+            )
         return header + struct.pack(SENSOR_LPS22HB_SAMPLE_FORMAT, self.pressure_pa)
 
     def _validate_header(self) -> None:
@@ -388,6 +446,12 @@ class SensorDataPayload:
         ):
             return
         if (
+            self.stream_id == STREAM_ID_LSM6DSL_ORIENTATION_MOTION
+            and self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1
+            and self.payload_len == SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
+        ):
+            return
+        if (
             self.stream_id == STREAM_ID_LPS22HB_PRESSURE
             and self.payload_format == PayloadFormat.LPS22HB_PRESSURE_INT32_V1
             and self.payload_len == SENSOR_LPS22HB_SAMPLE_SIZE
@@ -396,6 +460,7 @@ class SensorDataPayload:
         if self.stream_id not in (
             STREAM_ID_DUMMY_ACCEL3,
             STREAM_ID_LSM6DSL_IMU6,
+            STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
             STREAM_ID_LSM303AGR_MAG3,
             STREAM_ID_LPS22HB_PRESSURE,
             STREAM_ID_HTS221_TEMP_HUMIDITY,
@@ -407,6 +472,7 @@ class SensorDataPayload:
             PayloadFormat.HTS221_TEMP_HUMIDITY_INT16_V1,
             PayloadFormat.LPS22HB_PRESSURE_INT32_V1,
             PayloadFormat.MAG3_INT16_V1,
+            PayloadFormat.ORIENTATION_MOTION_INT16_V1,
         )
         if self.payload_format not in supported_formats:
             raise ProtocolError(f"unsupported payload format: {self.payload_format}")
@@ -426,6 +492,11 @@ class SensorDataPayload:
         if self.payload_format == PayloadFormat.MAG3_INT16_V1:
             raise ProtocolError(
                 f"sensor payload_len must be {SENSOR_MAG3_SAMPLE_SIZE}, got {self.payload_len}"
+            )
+        if self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1:
+            raise ProtocolError(
+                "sensor payload_len must be "
+                f"{SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE}, got {self.payload_len}"
             )
         raise ProtocolError(
             f"sensor payload_len must be {SENSOR_LPS22HB_SAMPLE_SIZE}, got {self.payload_len}"
@@ -525,6 +596,7 @@ class ConfigPayload:
         if self.stream_id not in {
             STREAM_ID_DUMMY_ACCEL3,
             STREAM_ID_LSM6DSL_IMU6,
+            STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
             STREAM_ID_LSM303AGR_MAG3,
             STREAM_ID_LPS22HB_PRESSURE,
             STREAM_ID_HTS221_TEMP_HUMIDITY,
@@ -702,7 +774,7 @@ class CapabilityPayload:
             supported_features=int(CapabilityFeature.INTERVAL_CONFIG)
             | int(CapabilityFeature.STATUS_READ)
             | int(CapabilityFeature.SENSOR_NOTIFY),
-            preferred_mtu=SENSOR_DATA_SIZE,
+            preferred_mtu=SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
             streams=(
                 CapabilityStream(
                     stream_id=1,
@@ -771,6 +843,20 @@ class CapabilityPayload:
                     default_interval_ms=LSM303AGR_MAG3_INTERVAL_MS,
                     min_interval_ms=LSM303AGR_MAG3_INTERVAL_MS,
                     max_interval_ms=LSM303AGR_MAG3_INTERVAL_MS,
+                    scale_exponent=0,
+                    reserved=0,
+                ),
+                CapabilityStream(
+                    stream_id=STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
+                    stream_type=StreamType.ORIENTATION_MOTION,
+                    channel_count=7,
+                    data_type=StreamDataType.INT16,
+                    unit=StreamUnit.MIXED,
+                    payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+                    stream_flags=int(StreamFlag.ENABLED_BY_DEFAULT) | int(StreamFlag.MIXED_UNITS),
+                    default_interval_ms=LSM6DSL_INTERVAL_MS,
+                    min_interval_ms=LSM6DSL_INTERVAL_MS,
+                    max_interval_ms=LSM6DSL_INTERVAL_MS,
                     scale_exponent=0,
                     reserved=0,
                 ),
