@@ -15,13 +15,13 @@
 ```mermaid
 flowchart LR
     Sensor["dummy accel / optional LSM6DSL / HTS221 / LPS22HB / LSM303AGR Mag"]
-    FW["Firmware\nnRF52840 DK\nZephyr + App Event Manager"]
-    BLE["Custom BLE GATT\nPeripheral / Server"]
-    Client["Python BLE client\nbleak Central"]
-    Core["Python app_core\nprotocol parse + app state"]
-    API["aiohttp backend\nHTTP + WebSocket"]
+    FW["Firmware<br>nRF52840 DK<br>Zephyr + App Event Manager"]
+    BLE["Custom BLE GATT<br>Peripheral / Server"]
+    Client["Python BLE client<br>bleak Central"]
+    Core["Python app_core<br>protocol parse + app state"]
+    API["aiohttp backend<br>HTTP + WebSocket"]
     CUI["interactive CUI"]
-    Web["Browser WebGUI\nHTML/CSS/JS"]
+    Web["Browser WebGUI<br>HTML/CSS/JS"]
 
     Sensor --> FW
     FW --> BLE

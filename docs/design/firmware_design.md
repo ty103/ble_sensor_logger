@@ -87,18 +87,18 @@ firmware/src/
 
 ```mermaid
 flowchart TB
-    BLECB["ble_service\nGATT callbacks"]
-    ControlEvent["pc_command_event\nconfig_update_event\nble_connected_event\nble_disconnected_event"]
-    Control["control\nstate machine"]
-    Dummy["sensor_dummy\nsample work"]
-    IMU["lsm6dsl_sensor\nsample work"]
-    Env["hts221_sensor\nsample work"]
-    Pressure["lps22hb_sensor\nsample work"]
-    Mag["lsm303agr_magn_sensor\nsample work"]
+    BLECB["ble_service<br>GATT callbacks"]
+    ControlEvent["pc_command_event<br>config_update_event<br>ble_connected_event<br>ble_disconnected_event"]
+    Control["control<br>state machine"]
+    Dummy["sensor_dummy<br>sample work"]
+    IMU["lsm6dsl_sensor<br>sample work"]
+    Env["hts221_sensor<br>sample work"]
+    Pressure["lps22hb_sensor<br>sample work"]
+    Mag["lsm303agr_magn_sensor<br>sample work"]
     SampleEvent["sensor_sample_event"]
-    Protocol["protocol\npack/unpack"]
+    Protocol["protocol<br>pack/unpack"]
     Notify["ble_service_notify_sample"]
-    Status["ble_service_set_status\nble_service_set_config"]
+    Status["ble_service_set_status<br>ble_service_set_config"]
 
     BLECB --> ControlEvent
     ControlEvent --> Control

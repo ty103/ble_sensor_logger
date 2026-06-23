@@ -38,13 +38,13 @@ pc_app/
 
 ```mermaid
 flowchart TB
-    Constants["constants.py\nUUID / device name"]
-    Protocol["protocol.py\npayload pack/unpack"]
-    BleClient["ble_client.py\nbleak wrapper"]
-    AppCore["app_core.py\nUI-independent use cases"]
-    Shell["ui_shell.py\ninteractive CUI"]
-    WebAPI["web_api.py\naiohttp HTTP/WebSocket"]
-    Frontend["web_frontend/app.js\nBrowser UI + chart + CSV"]
+    Constants["constants.py<br>UUID / device name"]
+    Protocol["protocol.py<br>payload pack/unpack"]
+    BleClient["ble_client.py<br>bleak wrapper"]
+    AppCore["app_core.py<br>UI-independent use cases"]
+    Shell["ui_shell.py<br>interactive CUI"]
+    WebAPI["web_api.py<br>aiohttp HTTP/WebSocket"]
+    Frontend["web_frontend/app.js<br>Browser UI + chart + CSV"]
 
     Constants --> BleClient
     Constants --> WebAPI
