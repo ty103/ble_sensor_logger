@@ -196,6 +196,7 @@ payload {
 | 10 | LSM6DSL 6-axis IMU | 26 Hz | accel/gyro |
 | 11 | LSM303AGR accel | TBD | accel |
 | 12 | LSM303AGR magnetometer | 10 Hz | mag |
+| 13 | LSM6DSL derived orientation | 26 Hz | pitch/roll/zenith + composite accel |
 | 20 | LPS22HB pressure | 1 Hz候補 | pressure |
 | 30 | HTS221 humidity/temperature | 1 Hz | humidity/temperature |
 
@@ -287,7 +288,54 @@ fields:
 - 最初はLSM6DSL streamを固定rate 26 Hzで実装し、その後stream単位Configでenable/rate変更へ進める。
 - CapabilityにはLSM6DSL streamのunit、scale、payload format、default/min/max rateを載せる。
 
-### 8.4 payload表現
+### 8.4 LSM6DSL派生姿勢stream方針
+
+ウェアラブルデバイスのsleep/sleep解除閾値を検討しやすくするため、LSM6DSLの加速度を基準に、ピッチ角、ロール角、ゼニス角、合成加速度をdevice側で計算し、Sensor Data frame v3の独立streamとしてPCへ送る。
+
+暫定stream案:
+
+```text
+stream_id = 13
+stream_type = ORIENTATION_MOTION
+payload_format = ORIENTATION_MOTION_INT16_V1
+rate = LSM6DSL IMU6 streamと同じ26 Hz
+payload_len = 14
+fields:
+  int16 pitch_naive_cdeg
+  int16 roll_naive_cdeg
+  int16 zenith_naive_cdeg
+  int16 pitch_filtered_cdeg
+  int16 roll_filtered_cdeg
+  int16 zenith_filtered_cdeg
+  int16 accel_norm_mg
+```
+
+角度は0.01 degree単位のcenti-degreeとする。ピッチ/ロールは原則 `-18000..18000`、ゼニスは `0..18000`、合成加速度はmg単位とし、範囲外はint16へclampする。このpayloadはSensor Data frame v3 header 12 bytesと合わせて26 bytesとなる。現行firmwareはATT MTU拡張を前提にしているため、1 notifyに収まる見込みである。
+
+軸定義はKConfigで明示する。最低限、device正面方向と、基準姿勢で重力方向が加速度センサのどの軸に対応するかを `+X/-X/+Y/-Y/+Z/-Z` から選ぶ。
+
+```text
+CONFIG_BSL_ORIENTATION_FRONT_AXIS=+X|-X|+Y|-Y|+Z|-Z
+CONFIG_BSL_ORIENTATION_GRAVITY_AXIS=+X|-X|+Y|-Y|+Z|-Z
+```
+
+実装時は2つの軸が同じ物理軸を指す設定をbuild時に拒否し、残りの横方向軸は右手系で導出する。角度計算では、sensor raw accelをこのdevice座標系へ射影してから、pitch、roll、zenithを計算する。これにより、board実装ごとのセンサ取り付け向きをPC側へ漏らさず、firmware設定だけで姿勢定義を固定できる。
+
+計算方針:
+
+- 合成加速度は `sqrt(ax^2 + ay^2 + az^2)` をmgで計算する。
+- naive pitch/roll/zenithは、加速度ベクトルを重力方向とみなして三角関数で計算する。
+- filtered pitch/rollは相補フィルタで計算する。相補フィルタは通常gyro積分とのfusionを前提にするため、実装前に「3軸加速度のみを入力とする」要求を厳密条件にするか、LSM6DSL gyroを補助入力として使うかを確認する。現時点の実装計画では、既存IMU6 streamがgyroを取得済みであることを利用し、LSM6DSL gyroを相補フィルタに使う。
+- filtered zenithは、filtered pitch/rollからdevice重力軸と鉛直方向のなす角として再計算する。
+- measurement start/stopとsequence resetはLSM6DSL streamと同期させる。LSM6DSLがunavailableの場合、姿勢streamもCapabilityから除外する。
+
+PC/WebGUI方針:
+
+- `pc_app` は `ORIENTATION_MOTION_INT16_V1` をparseし、`/api/capability` のbackend補完field metadataへ角度と合成加速度のlabel/unit/scale/decimalsを追加する。Capability schema v1へfield descriptorは追加しない。
+- 最新値カード、graph selector、CSV列は既存のCapability-driven経路に乗せる。CSV列名は `s13_pitch_naive_cdeg` のように `s<stream_id>_<field>` とする。
+- WebGUIには姿勢専用の3D cuboid viewを追加する。cuboidはfiltered pitch/rollを優先して回転させ、filtered値が未到着の場合だけnaive値をfallbackにする。3D描画はThree.jsを使い、runtimeで外部CDNに依存しない形で導入する。
+
+### 8.5 payload表現
 
 候補:
 
@@ -547,7 +595,31 @@ codex/webgui-capability-driven
 
 ### 優先度高
 
-1. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
+1. LSM6DSL派生姿勢stream `stream_id=13` をFirmware/PC/WebGUIへ追加する。
+   - 実装前に、相補フィルタでLSM6DSL gyroを補助入力として使う方針でよいかを確認する。3軸加速度のみを厳密条件にする場合は、filtered pitch/rollの定義をLPF姿勢などへ変更する。
+   - Firmware task:
+     - [ ] `firmware/src/protocol/protocol.h` / `protocol.c` に `BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION=13`、`BSL_STREAM_TYPE_ORIENTATION_MOTION`、`BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1`、14 bytes payload、`BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE` 更新、`BSL_CAPABILITY_MAX_STREAMS=6` を追加する。
+     - [ ] LSM6DSL sampling pathでIMU6 sampleと同じfetch結果からorientation sampleを生成し、measurement start/stop、sequence reset、availabilityをLSM6DSL streamと同期する。
+     - [ ] KConfigで `CONFIG_BSL_ORIENTATION_FRONT_AXIS` と `CONFIG_BSL_ORIENTATION_GRAVITY_AXIS` を追加し、`+X/-X/+Y/-Y/+Z/-Z` から選べるようにする。同じ物理軸の組み合わせはbuild時またはinit時に拒否する。
+     - [ ] naive pitch/roll/zenith、filtered pitch/roll、filtered pitch/roll由来zenith、`accel_norm_mg` を固定小数点で計算し、int16範囲へclampする。
+     - [ ] build/flash/RTTの初動では `firmware/docs/ai_quickstart.md` と `firmware/docs/build_flash_rtt_runbook.md` を参照し、ホーム配下の個人Skillに依存しない。
+   - PC backend task:
+     - [ ] `pc_app/src/ble_sensor_logger/protocol.py` にpayload format、parse/pack、validation、default Capabilityを追加する。
+     - [ ] `pc_app/src/ble_sensor_logger/web_api.py` にfield metadataを追加し、角度はdegree表示、合成加速度はmg表示にscaleする。
+     - [ ] CUI表示、BLE smoke、negative smoke、protocol/web/app_core pytestを更新する。
+   - WebGUI task:
+     - [ ] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
+     - [ ] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
+     - [ ] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
+   - 検証task:
+     - [ ] `pc_app/` で `uv run --extra dev pytest` を実行する。
+     - [ ] Web frontendの構文確認を行う。
+     - [ ] Firmware shield buildを行う。
+     - [ ] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6` と `stream_id=13` を確認する。
+     - [ ] BLE smokeで `stream_id=10` と `stream_id=13` のsampleが同じ測定中に流れること、CSVに `s13_*` 列が出ることを確認する。
+     - [ ] WebGUIを実ブラウザで確認し、数値表示、graph、3D cuboidが更新されることをPlaywright screenshotまたは同等の方法で確認する。
+
+2. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
    - Config v4次段候補: `SET_STREAM_ENABLE`、実センサstreamのrate変更、Config Response。
    - Status Notify候補: start/stop/config/errorのpush通知。
    - Log/Event候補: optional sensor詳細診断、I2C scan結果、Firmware warning。
@@ -582,16 +654,16 @@ codex/webgui-capability-driven
 1. 新Service/Characteristic UUID体系
 2. Capability payload形式の拡張方針（現行schema v1はstream descriptorまで。field metadataがFirmware由来で必要になった時点でschema v2/TLV化を検討する）
 3. Sensor Data frame形式の拡張方針（現行v3 headerからbatching/fragmentationへ進めるか）
-4. stream_idとpayload format idの管理方法。現行は `stream_id=1`, `DUMMY_ACCEL3_INT16_V1`, `stream_id=10`, `IMU6_INT16_V1`, `stream_id=30`, `HTS221_TEMP_HUMIDITY_INT16_V1`, `stream_id=20`, `LPS22HB_PRESSURE_INT32_V1`, `stream_id=12`, `MAG3_INT16_V1`
+4. stream_idとpayload format idの管理方法。現行は `stream_id=1`, `DUMMY_ACCEL3_INT16_V1`, `stream_id=10`, `IMU6_INT16_V1`, `stream_id=30`, `HTS221_TEMP_HUMIDITY_INT16_V1`, `stream_id=20`, `LPS22HB_PRESSURE_INT32_V1`, `stream_id=12`, `MAG3_INT16_V1`。次追加候補はLSM6DSL派生姿勢stream `stream_id=13`, `ORIENTATION_MOTION_INT16_V1`
 5. optional sensor未ready時の詳細診断方法。sensor別の最小診断はStatusに実装済みで、今後はI2C scan結果、address候補などをLog/Eventへ出すか検討する
-6. MTU拡張の扱い。現行v3 frameは最大24 bytesだが、将来の大きなpayloadではATT MTU拡張を前提にする
+6. MTU拡張の扱い。現行v3 frameは最大24 bytes、LSM6DSL派生姿勢stream案は26 bytesになる。将来の大きなpayloadではATT MTU拡張を前提にする
 7. fragmentation/reassemblyを初期から入れるか
 8. Config v4を `SET_STREAM_ENABLE`、実センサrate変更、TLV、Config Request/Responseのどれへ拡張するか
 9. Status Notifyのpayload
 10. Log/Eventを初期実装に含めるか
 11. NUS transport adapterのframe boundary方式
 12. CSV loggerの長時間logging対応。複数stream表現は `docs/adr/0004-wide-csv-stream-qualified-columns.md` で判断済み。今後はbackend保存、streaming download、stream別CSV分割の必要性が出た時点で再検討する
-13. WebGUIの自動UI生成範囲。現行は最新値カード、Signal選択、CSV列を `/api/capability` から生成する。Control/Config UIの自動生成は未着手
+13. WebGUIの自動UI生成範囲。現行は最新値カード、Signal選択、CSV列、stream interval一覧を `/api/capability` から生成する。Config変更UIは `min_interval_ms != max_interval_ms` のstreamだけを対象にし、固定rate streamは表示のみとする
 14. App Event Manager継続か、Zephyr zbus検討か
 
 ## 21. フェーズ別ロードマップ
@@ -605,12 +677,13 @@ codex/webgui-capability-driven
 7. LSM303AGR magnetometer 10 Hzを地磁気streamとして実装し、実機で `stream_id=12` の実データを確認済み。
 8. Configはstream単位の固定長binary v4を最小実装として導入済み。`stream_id=1` の `SET_STREAM_INTERVAL` をFirmware/PC/WebGUIへ実装し、実機で100 msから500 msへのinterval変更を確認済み。
 9. `stream_id=1` は `DUMMY_ACCEL3` / `DUMMY_ACCEL3_INT16_V1` へ整理済み。dummy batteryとA0 ADCはactive pathから外し、A0 ADCは必要になった時点で独立streamとして復活を検討する。
-10. `docs/specs/current_implementation_spec.md` と `docs/design/` をDUMMY_ACCEL3現行仕様に合わせて更新済み。
-11. PC backendのprotocol層をtransport非依存に再整理する。
-12. Firmwareのprotocol encoder/decoderをtransportから分離する。
-13. custom GATT transportで実装する。
-14. WebGUIをCapability drivenに寄せる。最新値カード、Signal選択、CSV列は2026-06-20に実装済み。field metadataは当面PC backendが `payload_format` から補完する正式仕様とする。
-15. NUS transportをオプションとして設計だけ残す、または最小実装する。
+10. LSM6DSL派生姿勢streamとして `stream_id=13` を追加し、pitch/roll/zenith、filtered pitch/roll/zenith、合成加速度をFirmwareで計算してWebGUI/CSV/3D表示へ流す。
+11. `docs/specs/current_implementation_spec.md` と `docs/design/` をDUMMY_ACCEL3現行仕様に合わせて更新済み。
+12. PC backendのprotocol層をtransport非依存に再整理する。
+13. Firmwareのprotocol encoder/decoderをtransportから分離する。
+14. custom GATT transportで実装する。
+15. WebGUIをCapability drivenに寄せる。最新値カード、Signal選択、CSV列は2026-06-20に実装済み。2026-06-23にstream interval一覧を追加し、変更可能な `DUMMY_ACCEL3` と固定rateの実センサstreamを同じ場所で確認できるようにした。field metadataは当面PC backendが `payload_format` から補完する正式仕様とする。
+16. NUS transportをオプションとして設計だけ残す、または最小実装する。
 
 ## 22. 現時点の推奨結論
 
@@ -636,5 +709,6 @@ codex/webgui-capability-driven
 - 2026-06-21: WebGUI rich graph化と、Connect/Start/Stop後のHTTP 500 error修正を確認済み。
 - 2026-06-21: Config v4 `SET_STREAM_INTERVAL` を `stream_id=1` で実装し、Firmware build / flash / BLE smoke / negative smokeで確認済み。
 - 2026-06-21: `stream_id=1` を `DUMMY_ACCEL3_INT16_V1` へ整理し、dummy batteryとA0 ADCをactive pathから削除。PC自動テスト / Firmware build / flash / BLE smoke / negative smokeで確認済み。
+- 2026-06-23: WebGUIのinterval表示を全streamへ広げ、`DUMMY_ACCEL3` はEditable、実センサstreamはFixedとして表示するよう更新。PC自動テストで確認済み。
 
 過去履歴内の `次作業` は当時のメモであり、現在の優先順位は `現在の残課題 / 次回作業キュー` を正とする。

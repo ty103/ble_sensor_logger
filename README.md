@@ -31,8 +31,7 @@ uv sync --extra dev
 ### WebGUI
 
 ```bash
-uv run --extra dev \
-  python -m ble_sensor_logger --web --host 127.0.0.1 --port 8765
+uv run --extra dev python -m ble_sensor_logger --web --host 127.0.0.1 --port 8765
 ```
 
 ブラウザで `http://127.0.0.1:8765` を開きます。以下を利用できます。
