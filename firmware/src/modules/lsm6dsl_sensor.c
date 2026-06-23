@@ -713,6 +713,11 @@ void lsm6dsl_sensor_force_gyro_calib(void)
 
 void lsm6dsl_sensor_set_gyro_calib_threshold_mdps(uint16_t threshold_mdps)
 {
+	if (threshold_mdps < 10U) {
+		threshold_mdps = 10U;
+	} else if (threshold_mdps > 1000U) {
+		threshold_mdps = 1000U;
+	}
 	calib_threshold_mdps = threshold_mdps;
 }
 
