@@ -5,6 +5,7 @@
 - 日本語で回答すること。
 - ドキュメントは日本語で作成すること。ただし専門用語は英語のままで良い（例: BLEのAdvertisingは広告と訳さずAdvertisingのままで良い）。
 - pipでなくuvを使う。
+- Build/Flash/RTTの初動では、まず `firmware/docs/ai_quickstart.md` を参照し、タスクに応じて `firmware/docs/runbooks/` の対応ファイルを参照する（build.md / flash.md / rtt_debug.md / troubleshooting.md）。
 
 ## 設計・引き継ぎ資料の扱い
 

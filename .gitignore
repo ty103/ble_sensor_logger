@@ -12,3 +12,4 @@ twister-out/
 *.hex
 *.elf
 *.map
+*.env

@@ -2,51 +2,32 @@
 
 対象は nRF52840 DK、Zephyr board target は `nrf52840dk/nrf52840`。
 
-nRF Connect SDK v3.2.2 のshellでbuildする。
+## ビルド・フラッシュ・RTT ガイド
 
+詳細な Build/Flash/RTT 手順は以下を参照してください：
+
+- **[docs/ai_quickstart.md](docs/ai_quickstart.md)** - AI・人向けの入口（タスク別ルーティング表）
+- **[docs/runbooks/](docs/runbooks/)** - タスク別詳細手順（build.md / flash.md / rtt_debug.md / troubleshooting.md）
+
+### よく使うコマンド
+
+基本ビルド：
 ```bash
-west build -b nrf52840dk/nrf52840 firmware
-west flash
+source .env
+west build -b nrf52840dk/nrf52840 firmware --build-dir build --pristine
+west flash --build-dir build
 ```
 
-X-NUCLEO-IKS01A2 shieldを有効にしてbuild/flashする。
-
+X-NUCLEO-IKS01A2 接続時：
 ```bash
-west build -b nrf52840dk/nrf52840 firmware --build-dir build/firmware --pristine --shield x_nucleo_iks01a2
-west flash --build-dir build/firmware
+source .env
+west build -b nrf52840dk/nrf52840 firmware --build-dir build --pristine --shield x_nucleo_iks01a2
+west flash --build-dir build
 ```
 
-VCOMが使えない試作基板向けに、RTT-only loggingでbuild/flashする。
+詳細・RTT・トラブルシューティング は [ai_quickstart.md](docs/ai_quickstart.md) を参照。
 
-```bash
-west build -b nrf52840dk/nrf52840 firmware --build-dir build/firmware-rtt --pristine --shield x_nucleo_iks01a2 --extra-conf rtt_debug.conf
-west flash --build-dir build/firmware-rtt --dev-id 1050278440
-```
-
-X-NUCLEO-IKS01A2の周期I2C probeはbring-up診断時だけ有効にする。
-
-```bash
-west build -b nrf52840dk/nrf52840 firmware --build-dir build/firmware-probe --pristine --shield x_nucleo_iks01a2 --extra-conf iks01a2_i2c_probe_debug.conf
-```
-
-RTT loggingとI2C probeを同時に使う場合は、CMake経由で2つのextra configを渡す。
-
-```bash
-west build -b nrf52840dk/nrf52840 firmware --build-dir build/firmware-rtt-probe --pristine --shield x_nucleo_iks01a2 -- -DEXTRA_CONF_FILE="rtt_debug.conf;iks01a2_i2c_probe_debug.conf"
-```
-
-RTT log取得にはSEGGER toolを使う。`JLinkRTTLogger` を使うと、長時間確認しやすいfile logを残せる。
-
-```text
-Device name: NRF52840_XXAA
-Target interface: SWD
-Interface speed: 4000
-RTT Control Block address: <empty for auto>
-RTT Channel name or index: 0
-Output file: build/rtt_logger_capture.log
-```
-
-移植性ルール:
+## 移植性ルール
 
 - nRF52840 DK専用のhelper APIに依存しない。
 - NCS sampleのboard-control helperに依存しない。

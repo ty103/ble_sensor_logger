@@ -63,20 +63,31 @@ stop
 exit
 ```
 
-## Firmwareビルド
+## Firmwareビルド・フラッシュ・RTT
 
-NCS v3.2.2環境で実行します。
+詳細な手順は [firmware/docs/ai_quickstart.md](firmware/docs/ai_quickstart.md) を参照してください。
 
+初めて実行する場合は [firmware/docs/ai_quickstart.md](firmware/docs/ai_quickstart.md) から開始してください。
+
+### よくあるケース
+
+**基本的なビルド・フラッシュ** (センサ無し):
 ```bash
-west build -b nrf52840dk/nrf52840 firmware --build-dir build/firmware --pristine
-west flash --build-dir build/firmware
+cd firmware
+source .env
+west build -b nrf52840dk/nrf52840 ../firmware --build-dir ../build --pristine
+west flash --build-dir ../build
 ```
+
+**X-NUCLEO-IKS01A2 接続時**:
 
 X-NUCLEO-IKS01A2を接続してLSM6DSL/HTS221/LPS22HB/LSM303AGR magnetometer streamを有効にする場合は、Zephyr標準shieldを指定します。
 
 ```bash
-west build -b nrf52840dk/nrf52840 firmware --build-dir build/firmware --pristine --shield x_nucleo_iks01a2
-west flash --build-dir build/firmware
+cd firmware
+source .env
+west build -b nrf52840dk/nrf52840 ../firmware --build-dir ../build --pristine --shield x_nucleo_iks01a2
+west flash --build-dir ../build
 ```
 
 `capability` でoptional streamが出ない場合は、`status` の `optional_sensors` またはCUI出力の `optional_sensors=...` を確認します。`last_error` には既存表示向けの代表値が出ます。
@@ -88,6 +99,8 @@ west flash --build-dir build/firmware
 | `LSM6DSL_CONFIG_FAILED` | LSM6DSLは見えているがODR設定に失敗しているため、Firmware logとZephyr driver設定 |
 | `HTS221_NO_DEVICETREE` / `LPS22HB_NO_DEVICETREE` / `LSM303AGR_MAGN_NO_DEVICETREE` | `--shield x_nucleo_iks01a2` 付きでbuildしたか |
 | `HTS221_NOT_READY` / `LPS22HB_NOT_READY` / `LSM303AGR_MAGN_NOT_READY` | X-NUCLEO-IKS01A2の装着、3.3 V/GND、Arduino I2C bus、対象sensor address |
+
+詳細・RTT デバッグ・トラブルシューティング は [firmware/docs/ai_quickstart.md](firmware/docs/ai_quickstart.md) を参照してください。
 
 ## テスト
 
