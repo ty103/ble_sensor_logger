@@ -17,7 +17,7 @@
 #define BSL_SENSOR_DATA_HEADER_SIZE 12
 #define BSL_SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE 6
 #define BSL_SENSOR_IMU6_SAMPLE_SIZE 12
-#define BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE 22
+#define BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE 28
 #define BSL_SENSOR_MAG3_SAMPLE_SIZE 6
 #define BSL_SENSOR_HTS221_SAMPLE_SIZE 4
 #define BSL_SENSOR_LPS22HB_SAMPLE_SIZE 4
@@ -65,6 +65,7 @@ enum bsl_config_op {
 	BSL_CONFIG_OP_SET_COMPLEMENTARY_ALPHA = 0x02,
 	BSL_CONFIG_OP_SET_MAHONY_KP = 0x03,
 	BSL_CONFIG_OP_SET_MAHONY_KI = 0x04,
+	BSL_CONFIG_OP_SET_IIR_CUTOFF_MILLIHZ = 0x05,
 };
 
 enum bsl_device_state {
@@ -131,6 +132,7 @@ enum bsl_payload_format {
 	BSL_PAYLOAD_FORMAT_LPS22HB_PRESSURE_INT32_V1 = 4,
 	BSL_PAYLOAD_FORMAT_MAG3_INT16_V1 = 5,
 	BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1 = 6,
+	BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V2 = 7,
 };
 
 enum bsl_stream_flag {
@@ -168,6 +170,9 @@ struct bsl_orientation_motion_sample {
 	int16_t pitch_naive_cdeg;
 	int16_t roll_naive_cdeg;
 	int16_t zenith_naive_cdeg;
+	int16_t pitch_iir_cdeg;
+	int16_t roll_iir_cdeg;
+	int16_t zenith_iir_cdeg;
 	int16_t pitch_complementary_cdeg;
 	int16_t roll_complementary_cdeg;
 	int16_t zenith_complementary_cdeg;

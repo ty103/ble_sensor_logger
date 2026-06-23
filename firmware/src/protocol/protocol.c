@@ -62,7 +62,7 @@ int bsl_sensor_data_pack(const struct bsl_sensor_data *payload, uint8_t *buf, si
 		}
 	} else if (payload->header.stream_id == BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION) {
 		if (payload->header.payload_format !=
-			    BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1 ||
+			    BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V2 ||
 		    payload->header.payload_len != BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE) {
 			return -EPROTO;
 		}
@@ -211,6 +211,8 @@ bool bsl_config_is_valid(const struct bsl_config *payload)
 	case BSL_CONFIG_OP_SET_MAHONY_KP:
 	case BSL_CONFIG_OP_SET_MAHONY_KI:
 		return payload->sample_interval_ms <= 10000U;
+	case BSL_CONFIG_OP_SET_IIR_CUTOFF_MILLIHZ:
+		return payload->sample_interval_ms >= 1U && payload->sample_interval_ms <= 13000U;
 	default:
 		return false;
 	}
@@ -277,10 +279,10 @@ void bsl_capability_default(struct bsl_capability *payload)
 
 	payload->streams[2].stream_id = BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION;
 	payload->streams[2].stream_type = BSL_STREAM_TYPE_ORIENTATION_MOTION;
-	payload->streams[2].channel_count = 11;
+	payload->streams[2].channel_count = 14;
 	payload->streams[2].data_type = BSL_STREAM_DATA_TYPE_INT16;
 	payload->streams[2].unit = BSL_STREAM_UNIT_MIXED;
-	payload->streams[2].payload_format = BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1;
+	payload->streams[2].payload_format = BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V2;
 	payload->streams[2].stream_flags = BSL_STREAM_FLAG_ENABLED_BY_DEFAULT |
 					   BSL_STREAM_FLAG_MIXED_UNITS;
 	payload->streams[2].default_interval_ms = BSL_LSM6DSL_INTERVAL_MS;

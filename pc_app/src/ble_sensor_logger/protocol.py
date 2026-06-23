@@ -29,7 +29,7 @@ HTS221_INTERVAL_MS = 1000
 SENSOR_DATA_HEADER_FORMAT = "<BBBBHIBB"
 SENSOR_DUMMY_ACCEL3_SAMPLE_FORMAT = "<hhh"
 SENSOR_IMU6_SAMPLE_FORMAT = "<hhhhhh"
-SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT = "<hhhhhhhhhhh"
+SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT = "<hhhhhhhhhhhhhh"
 SENSOR_MAG3_SAMPLE_FORMAT = "<hhh"
 SENSOR_HTS221_SAMPLE_FORMAT = "<hh"
 SENSOR_LPS22HB_SAMPLE_FORMAT = "<i"
@@ -71,6 +71,7 @@ class ConfigOp(IntEnum):
     SET_COMPLEMENTARY_ALPHA = 0x02
     SET_MAHONY_KP = 0x03
     SET_MAHONY_KI = 0x04
+    SET_IIR_CUTOFF_MILLIHZ = 0x05
 
 
 class DeviceState(IntEnum):
@@ -141,6 +142,7 @@ class PayloadFormat(IntEnum):
     LPS22HB_PRESSURE_INT32_V1 = 4
     MAG3_INT16_V1 = 5
     ORIENTATION_MOTION_INT16_V1 = 6
+    ORIENTATION_MOTION_INT16_V2 = 7
 
 
 class StreamFlag(IntEnum):
@@ -173,6 +175,9 @@ class SensorDataPayload:
     pitch_naive_cdeg: int = 0
     roll_naive_cdeg: int = 0
     zenith_naive_cdeg: int = 0
+    pitch_iir_cdeg: int = 0
+    roll_iir_cdeg: int = 0
+    zenith_iir_cdeg: int = 0
     pitch_complementary_cdeg: int = 0
     roll_complementary_cdeg: int = 0
     zenith_complementary_cdeg: int = 0
@@ -306,7 +311,7 @@ class SensorDataPayload:
                 mag_y_ut=mag_y_ut,
                 mag_z_ut=mag_z_ut,
             )
-        elif payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1:
+        elif payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V2:
             if payload_len != SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE:
                 raise ProtocolError(
                     "ORIENTATION_MOTION payload_len must be "
@@ -316,6 +321,9 @@ class SensorDataPayload:
                 pitch_naive_cdeg,
                 roll_naive_cdeg,
                 zenith_naive_cdeg,
+                pitch_iir_cdeg,
+                roll_iir_cdeg,
+                zenith_iir_cdeg,
                 pitch_complementary_cdeg,
                 roll_complementary_cdeg,
                 zenith_complementary_cdeg,
@@ -340,6 +348,9 @@ class SensorDataPayload:
                 pitch_naive_cdeg=pitch_naive_cdeg,
                 roll_naive_cdeg=roll_naive_cdeg,
                 zenith_naive_cdeg=zenith_naive_cdeg,
+                pitch_iir_cdeg=pitch_iir_cdeg,
+                roll_iir_cdeg=roll_iir_cdeg,
+                zenith_iir_cdeg=zenith_iir_cdeg,
                 pitch_complementary_cdeg=pitch_complementary_cdeg,
                 roll_complementary_cdeg=roll_complementary_cdeg,
                 zenith_complementary_cdeg=zenith_complementary_cdeg,
@@ -417,12 +428,15 @@ class SensorDataPayload:
                 self.mag_y_ut,
                 self.mag_z_ut,
             )
-        if self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1:
+        if self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V2:
             return header + struct.pack(
                 SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT,
                 self.pitch_naive_cdeg,
                 self.roll_naive_cdeg,
                 self.zenith_naive_cdeg,
+                self.pitch_iir_cdeg,
+                self.roll_iir_cdeg,
+                self.zenith_iir_cdeg,
                 self.pitch_complementary_cdeg,
                 self.roll_complementary_cdeg,
                 self.zenith_complementary_cdeg,
@@ -465,7 +479,7 @@ class SensorDataPayload:
             return
         if (
             self.stream_id == STREAM_ID_LSM6DSL_ORIENTATION_MOTION
-            and self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1
+            and self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V2
             and self.payload_len == SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
         ):
             return
@@ -490,7 +504,7 @@ class SensorDataPayload:
             PayloadFormat.HTS221_TEMP_HUMIDITY_INT16_V1,
             PayloadFormat.LPS22HB_PRESSURE_INT32_V1,
             PayloadFormat.MAG3_INT16_V1,
-            PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+            PayloadFormat.ORIENTATION_MOTION_INT16_V2,
         )
         if self.payload_format not in supported_formats:
             raise ProtocolError(f"unsupported payload format: {self.payload_format}")
@@ -511,7 +525,7 @@ class SensorDataPayload:
             raise ProtocolError(
                 f"sensor payload_len must be {SENSOR_MAG3_SAMPLE_SIZE}, got {self.payload_len}"
             )
-        if self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1:
+        if self.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V2:
             raise ProtocolError(
                 "sensor payload_len must be "
                 f"{SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE}, got {self.payload_len}"
@@ -634,6 +648,10 @@ class ConfigPayload:
         if self.op in (ConfigOp.SET_MAHONY_KP, ConfigOp.SET_MAHONY_KI):
             if self.sample_interval_ms > 10_000:
                 raise ProtocolError("Mahony gain must be 0.000-10.000")
+            return
+        if self.op == ConfigOp.SET_IIR_CUTOFF_MILLIHZ:
+            if self.sample_interval_ms < 1 or self.sample_interval_ms > 13_000:
+                raise ProtocolError("IIR cutoff must be 0.001-13.000 Hz")
             return
         raise ProtocolError(f"unsupported config op: {self.op}")
 
@@ -832,10 +850,10 @@ class CapabilityPayload:
                 CapabilityStream(
                     stream_id=STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
                     stream_type=StreamType.ORIENTATION_MOTION,
-                    channel_count=11,
+                    channel_count=14,
                     data_type=StreamDataType.INT16,
                     unit=StreamUnit.MIXED,
-                    payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+                    payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V2,
                     stream_flags=int(StreamFlag.ENABLED_BY_DEFAULT) | int(StreamFlag.MIXED_UNITS),
                     default_interval_ms=LSM6DSL_INTERVAL_MS,
                     min_interval_ms=LSM6DSL_INTERVAL_MS,

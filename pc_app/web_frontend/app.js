@@ -16,6 +16,7 @@ const elements = {
   complementaryAlphaInput: $("complementaryAlphaInput"),
   mahonyKpInput: $("mahonyKpInput"),
   mahonyKiInput: $("mahonyKiInput"),
+  iirCutoffInput: $("iirCutoffInput"),
   applyFilterButton: $("applyFilterButton"),
   refreshStatusButton: $("refreshStatusButton"),
   metricsGrid: $("metricsGrid"),
@@ -27,12 +28,17 @@ const elements = {
   orientationState: $("orientationState"),
   orientationMode: $("orientationMode"),
   orientationToggleNaive: $("orientationToggleNaive"),
+  orientationToggleIir: $("orientationToggleIir"),
   orientationToggleComplementary: $("orientationToggleComplementary"),
   orientationToggleMahony: $("orientationToggleMahony"),
   orientationNaivePitch: $("orientationNaivePitch"),
   orientationNaiveRoll: $("orientationNaiveRoll"),
   orientationNaiveZenith: $("orientationNaiveZenith"),
   orientationNaiveAccel: $("orientationNaiveAccel"),
+  orientationIirPitch: $("orientationIirPitch"),
+  orientationIirRoll: $("orientationIirRoll"),
+  orientationIirZenith: $("orientationIirZenith"),
+  orientationIirAccel: $("orientationIirAccel"),
   orientationComplementaryPitch: $("orientationComplementaryPitch"),
   orientationComplementaryRoll: $("orientationComplementaryRoll"),
   orientationComplementaryZenith: $("orientationComplementaryZenith"),
@@ -65,6 +71,23 @@ const orientationModes = {
       roll: "orientationNaiveRoll",
       zenith: "orientationNaiveZenith",
       accel: "orientationNaiveAccel",
+    },
+  },
+  iir: {
+    label: "IIR",
+    color: 0xc29a2e,
+    toggle: "orientationToggleIir",
+    fields: {
+      pitch: "pitch_iir_cdeg",
+      roll: "roll_iir_cdeg",
+      zenith: "zenith_iir_cdeg",
+      accel: "accel_norm_mg",
+    },
+    readout: {
+      pitch: "orientationIirPitch",
+      roll: "orientationIirRoll",
+      zenith: "orientationIirZenith",
+      accel: "orientationIirAccel",
     },
   },
   complementary: {
@@ -164,6 +187,27 @@ const fallbackCapability = {
         {
           field: "zenith_naive_cdeg",
           label: "Orientation Zenith Naive",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "pitch_iir_cdeg",
+          label: "Orientation Pitch IIR",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "roll_iir_cdeg",
+          label: "Orientation Roll IIR",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "zenith_iir_cdeg",
+          label: "Orientation Zenith IIR",
           unit: "deg",
           scale: 0.01,
           decimals: 2,
@@ -631,7 +675,7 @@ function setupOrientationScene() {
     camera.position.set(4.6, 2.5, 5.8);
     camera.lookAt(0, 0, 0);
 
-    const positions = { naive: -2.6, complementary: 0, mahony: 2.6 };
+    const positions = { naive: -3.9, iir: -1.3, complementary: 1.3, mahony: 3.9 };
     Object.entries(orientationModes).forEach(([key, mode]) => {
       const geometry = new THREE.BoxGeometry(1.85, 0.28, 1.05);
       const cuboid = new THREE.Mesh(
@@ -866,10 +910,12 @@ async function applyOrientationFilters() {
     complementary_alpha: boundedNumber(elements.complementaryAlphaInput, 0.98),
     mahony_kp: boundedNumber(elements.mahonyKpInput, 0.5),
     mahony_ki: boundedNumber(elements.mahonyKiInput, 0),
+    iir_cutoff_hz: boundedNumber(elements.iirCutoffInput, 2),
   };
   elements.complementaryAlphaInput.value = body.complementary_alpha;
   elements.mahonyKpInput.value = body.mahony_kp;
   elements.mahonyKiInput.value = body.mahony_ki;
+  elements.iirCutoffInput.value = body.iir_cutoff_hz;
   await commandAndRefresh("/api/orientation-filter", body);
   showToast("Orientation filters applied");
 }

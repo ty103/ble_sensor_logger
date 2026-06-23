@@ -141,7 +141,7 @@ def test_sequence_gap_tracking_is_per_stream():
             flags=0,
             sequence=1,
             timestamp_ms=105,
-            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V2,
             payload_len=SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
             accel_x_mg=0,
             accel_y_mg=0,
@@ -149,6 +149,9 @@ def test_sequence_gap_tracking_is_per_stream():
             pitch_naive_cdeg=-1234,
             roll_naive_cdeg=567,
             zenith_naive_cdeg=9012,
+            pitch_iir_cdeg=-1220,
+            roll_iir_cdeg=590,
+            zenith_iir_cdeg=9005,
             pitch_complementary_cdeg=-1200,
             roll_complementary_cdeg=600,
             zenith_complementary_cdeg=9000,
@@ -239,7 +242,7 @@ def test_sequence_gap_tracking_is_per_stream():
             flags=0,
             sequence=2,
             timestamp_ms=205,
-            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V2,
             payload_len=SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
             accel_x_mg=0,
             accel_y_mg=0,
@@ -247,6 +250,9 @@ def test_sequence_gap_tracking_is_per_stream():
             pitch_naive_cdeg=-1233,
             roll_naive_cdeg=568,
             zenith_naive_cdeg=9011,
+            pitch_iir_cdeg=-1219,
+            roll_iir_cdeg=591,
+            zenith_iir_cdeg=9004,
             pitch_complementary_cdeg=-1199,
             roll_complementary_cdeg=601,
             zenith_complementary_cdeg=8999,
@@ -291,7 +297,7 @@ def test_read_capability_uses_client_payload():
         assert capability.schema_version == 1
         assert capability.streams[0].payload_format.name == "DUMMY_ACCEL3_INT16_V1"
         assert capability.streams[1].payload_format.name == "IMU6_INT16_V1"
-        assert capability.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
+        assert capability.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V2"
         assert capability.streams[3].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
         assert capability.streams[4].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
         assert capability.streams[5].payload_format.name == "MAG3_INT16_V1"
@@ -320,16 +326,17 @@ def test_set_orientation_filter_params_writes_config_v4_payloads():
         client = FakeClient()
         app = SensorLoggerApp(client=client)
 
-        await app.set_orientation_filter_params(0.975, 0.5, 0.01)
+        await app.set_orientation_filter_params(0.975, 0.5, 0.01, 2.5)
 
-        assert len(client.config_writes) == 3
+        assert len(client.config_writes) == 4
         payloads = [ConfigPayload.unpack(payload) for payload in client.config_writes]
         assert [payload.op for payload in payloads] == [
             ConfigOp.SET_COMPLEMENTARY_ALPHA,
             ConfigOp.SET_MAHONY_KP,
             ConfigOp.SET_MAHONY_KI,
+            ConfigOp.SET_IIR_CUTOFF_MILLIHZ,
         ]
-        assert [payload.stream_id for payload in payloads] == [13, 13, 13]
-        assert [payload.sample_interval_ms for payload in payloads] == [975, 500, 10]
+        assert [payload.stream_id for payload in payloads] == [13, 13, 13, 13]
+        assert [payload.sample_interval_ms for payload in payloads] == [975, 500, 10, 2500]
 
     asyncio.run(run())

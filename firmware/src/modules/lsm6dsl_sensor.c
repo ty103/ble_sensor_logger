@@ -18,6 +18,7 @@ LOG_MODULE_REGISTER(lsm6dsl_sensor, LOG_LEVEL_INF);
 #define BSL_ORIENTATION_COMPLEMENTARY_ALPHA_DEFAULT 0.98
 #define BSL_ORIENTATION_MAHONY_KP_DEFAULT 0.5
 #define BSL_ORIENTATION_MAHONY_KI_DEFAULT 0.0
+#define BSL_ORIENTATION_IIR_CUTOFF_HZ_DEFAULT 2.0
 #define BSL_PI 3.14159265358979323846
 
 static struct k_work_delayable sample_work;
@@ -30,6 +31,10 @@ static uint32_t orientation_last_timestamp_ms;
 static double complementary_alpha = BSL_ORIENTATION_COMPLEMENTARY_ALPHA_DEFAULT;
 static double mahony_kp = BSL_ORIENTATION_MAHONY_KP_DEFAULT;
 static double mahony_ki = BSL_ORIENTATION_MAHONY_KI_DEFAULT;
+static double iir_cutoff_hz = BSL_ORIENTATION_IIR_CUTOFF_HZ_DEFAULT;
+static double iir_pitch_deg;
+static double iir_roll_deg;
+static double iir_zenith_deg;
 static double complementary_pitch_deg;
 static double complementary_roll_deg;
 static double mahony_integral[3];
@@ -191,6 +196,13 @@ static double zenith_from_pitch_roll(double pitch_deg, double roll_deg)
 	return rad_to_deg(acos(clamp_double(z_component, -1.0, 1.0)));
 }
 
+static double iir_alpha_from_cutoff(double cutoff_hz, double dt_s)
+{
+	double rc_s = 1.0 / (2.0 * BSL_PI * cutoff_hz);
+
+	return clamp_double(dt_s / (rc_s + dt_s), 0.0, 1.0);
+}
+
 static void normalize_quaternion(void)
 {
 	double norm = sqrt((mahony_q[0] * mahony_q[0]) + (mahony_q[1] * mahony_q[1]) +
@@ -301,6 +313,9 @@ static void reset_orientation_filters(void)
 	orientation_last_timestamp_ms = 0;
 	complementary_pitch_deg = 0.0;
 	complementary_roll_deg = 0.0;
+	iir_pitch_deg = 0.0;
+	iir_roll_deg = 0.0;
+	iir_zenith_deg = 0.0;
 	mahony_integral[0] = 0.0;
 	mahony_integral[1] = 0.0;
 	mahony_integral[2] = 0.0;
@@ -363,7 +378,8 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 	double pitch_naive_deg;
 	double roll_naive_deg;
 	double zenith_naive_deg;
-	double dt_s;
+	double dt_s = (double)BSL_LSM6DSL_INTERVAL_MS / 1000.0;
+	double iir_alpha;
 	double gyro_pitch_delta_deg;
 	double gyro_roll_delta_deg;
 	double mahony_pitch_deg;
@@ -385,6 +401,9 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 	if (!orientation_filter_initialized) {
 		complementary_pitch_deg = pitch_naive_deg;
 		complementary_roll_deg = roll_naive_deg;
+		iir_pitch_deg = pitch_naive_deg;
+		iir_roll_deg = roll_naive_deg;
+		iir_zenith_deg = zenith_naive_deg;
 		initialize_mahony_quaternion(pitch_naive_deg, roll_naive_deg);
 		orientation_filter_initialized = true;
 	} else {
@@ -394,6 +413,10 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 			dt_s = (double)BSL_LSM6DSL_INTERVAL_MS / 1000.0;
 		}
 		dt_s = clamp_double(dt_s, 0.001, 1.0);
+		iir_alpha = iir_alpha_from_cutoff(iir_cutoff_hz, dt_s);
+		iir_pitch_deg += iir_alpha * (pitch_naive_deg - iir_pitch_deg);
+		iir_roll_deg += iir_alpha * (roll_naive_deg - iir_roll_deg);
+		iir_zenith_deg += iir_alpha * (zenith_naive_deg - iir_zenith_deg);
 		gyro_pitch_delta_deg = (gyro[1] / 1000.0) * dt_s;
 		gyro_roll_delta_deg = (gyro[0] / 1000.0) * dt_s;
 		complementary_pitch_deg =
@@ -409,11 +432,14 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 	mahony_zenith_deg = zenith_from_pitch_roll(mahony_pitch_deg, mahony_roll_deg);
 
 	fill_header(sample, BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
-		    BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1,
+		    BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V2,
 		    BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE, sample_sequence, timestamp_ms);
 	sample->payload.orientation_motion.pitch_naive_cdeg = deg_to_cdeg(pitch_naive_deg);
 	sample->payload.orientation_motion.roll_naive_cdeg = deg_to_cdeg(roll_naive_deg);
 	sample->payload.orientation_motion.zenith_naive_cdeg = deg_to_cdeg(zenith_naive_deg);
+	sample->payload.orientation_motion.pitch_iir_cdeg = deg_to_cdeg(iir_pitch_deg);
+	sample->payload.orientation_motion.roll_iir_cdeg = deg_to_cdeg(iir_roll_deg);
+	sample->payload.orientation_motion.zenith_iir_cdeg = deg_to_cdeg(iir_zenith_deg);
 	sample->payload.orientation_motion.pitch_complementary_cdeg =
 		deg_to_cdeg(complementary_pitch_deg);
 	sample->payload.orientation_motion.roll_complementary_cdeg =
@@ -610,4 +636,9 @@ void lsm6dsl_sensor_set_mahony_kp_milli(uint16_t kp_milli)
 void lsm6dsl_sensor_set_mahony_ki_milli(uint16_t ki_milli)
 {
 	mahony_ki = clamp_double((double)ki_milli / 1000.0, 0.0, 10.0);
+}
+
+void lsm6dsl_sensor_set_iir_cutoff_millihz(uint16_t cutoff_millihz)
+{
+	iir_cutoff_hz = clamp_double((double)cutoff_millihz / 1000.0, 0.001, 13.0);
 }

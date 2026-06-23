@@ -37,6 +37,9 @@ SAMPLE_VALUE_FIELDS = (
     "pitch_naive_cdeg",
     "roll_naive_cdeg",
     "zenith_naive_cdeg",
+    "pitch_iir_cdeg",
+    "roll_iir_cdeg",
+    "zenith_iir_cdeg",
     "pitch_complementary_cdeg",
     "roll_complementary_cdeg",
     "zenith_complementary_cdeg",
@@ -66,10 +69,13 @@ FIELDS_BY_PAYLOAD_FORMAT = {
     ),
     PayloadFormat.LPS22HB_PRESSURE_INT32_V1: ("pressure_pa",),
     PayloadFormat.MAG3_INT16_V1: ("mag_x_ut", "mag_y_ut", "mag_z_ut"),
-    PayloadFormat.ORIENTATION_MOTION_INT16_V1: (
+    PayloadFormat.ORIENTATION_MOTION_INT16_V2: (
         "pitch_naive_cdeg",
         "roll_naive_cdeg",
         "zenith_naive_cdeg",
+        "pitch_iir_cdeg",
+        "roll_iir_cdeg",
+        "zenith_iir_cdeg",
         "pitch_complementary_cdeg",
         "roll_complementary_cdeg",
         "zenith_complementary_cdeg",
@@ -196,7 +202,7 @@ FIELD_METADATA_BY_PAYLOAD_FORMAT = {
             "decimals": 0,
         },
     ),
-    PayloadFormat.ORIENTATION_MOTION_INT16_V1: (
+    PayloadFormat.ORIENTATION_MOTION_INT16_V2: (
         {
             "field": "pitch_naive_cdeg",
             "label": "LSM6DSL Pitch Naive",
@@ -214,6 +220,27 @@ FIELD_METADATA_BY_PAYLOAD_FORMAT = {
         {
             "field": "zenith_naive_cdeg",
             "label": "LSM6DSL Zenith Naive",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "pitch_iir_cdeg",
+            "label": "LSM6DSL Pitch IIR",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "roll_iir_cdeg",
+            "label": "LSM6DSL Roll IIR",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "zenith_iir_cdeg",
+            "label": "LSM6DSL Zenith IIR",
             "unit": "degree",
             "scale": 0.01,
             "decimals": 2,
@@ -363,10 +390,12 @@ class WebBackend:
         complementary_alpha = float(body["complementary_alpha"])
         mahony_kp = float(body["mahony_kp"])
         mahony_ki = float(body["mahony_ki"])
+        iir_cutoff_hz = float(body["iir_cutoff_hz"])
         await self.sensor_app.set_orientation_filter_params(
             complementary_alpha,
             mahony_kp,
             mahony_ki,
+            iir_cutoff_hz,
         )
         await self.broadcast_state()
         return web.json_response(
@@ -375,6 +404,7 @@ class WebBackend:
                 "complementary_alpha": complementary_alpha,
                 "mahony_kp": mahony_kp,
                 "mahony_ki": mahony_ki,
+                "iir_cutoff_hz": iir_cutoff_hz,
             }
         )
 

@@ -88,22 +88,27 @@ def test_web_frontend_has_orientation_view():
     assert 'id="orientationCanvas"' in index_html
     assert 'id="orientationMode"' in index_html
     assert 'id="orientationNaivePitch"' in index_html
+    assert 'id="orientationIirPitch"' in index_html
     assert 'id="orientationComplementaryPitch"' in index_html
     assert 'id="orientationMahonyPitch"' in index_html
     assert 'id="orientationMahonyYaw"' in index_html
     assert 'id="orientationToggleNaive"' in index_html
+    assert 'id="orientationToggleIir"' in index_html
+    assert 'id="iirCutoffInput"' in index_html
     assert 'id="applyFilterButton"' in index_html
     assert 'from "/static/vendor/three.module.min.js"' in app_js
     assert "new THREE.WebGLRenderer" in app_js
     assert "stream_id: 13" in app_js
     assert 'stream_type: "ORIENTATION_MOTION"' in app_js
     assert 'field: "pitch_complementary_cdeg"' in app_js
+    assert 'field: "pitch_iir_cdeg"' in app_js
     assert 'field: "pitch_mahony_cdeg"' in app_js
     assert 'field: "yaw_mahony_cdeg"' in app_js
     assert 'field: "accel_norm_mg"' in app_js
     assert "orientationModeValues(source, mode)" in app_js
     assert 'commandAndRefresh("/api/orientation-filter", body)' in app_js
     assert "updateOrientationView(sample)" in app_js
+    assert '<details class="live-raw-section" open>' in index_html
 
 
 def test_web_frontend_csv_uses_stream_qualified_columns():
@@ -226,13 +231,15 @@ def test_capability_response_uses_stream_metadata():
         assert '"payload_format": "HTS221_TEMP_HUMIDITY_INT16_V1"' in body
         assert '"payload_format": "LPS22HB_PRESSURE_INT32_V1"' in body
         assert '"payload_format": "MAG3_INT16_V1"' in body
-        assert '"payload_format": "ORIENTATION_MOTION_INT16_V1"' in body
+        assert '"payload_format": "ORIENTATION_MOTION_INT16_V2"' in body
         assert '"fields": [' in body
         assert '"label": "Dummy Accel Z"' in body
         assert '"label": "LSM6DSL Accel Z"' in body
         assert '"label": "LSM303AGR Mag Z"' in body
         assert '"label": "LSM6DSL Pitch Complementary"' in body
+        assert '"label": "LSM6DSL Pitch IIR"' in body
         assert '"label": "LSM6DSL Pitch Mahony"' in body
+        assert '"field": "pitch_iir_cdeg"' in body
         assert '"field": "yaw_mahony_cdeg"' in body
         assert '"field": "accel_norm_mg"' in body
         assert '"unit": "%RH"' in body
@@ -309,25 +316,35 @@ def test_set_orientation_filter_posts_filter_config():
             super().__init__()
             self.filter_calls = []
 
-        async def set_orientation_filter_params(self, complementary_alpha, mahony_kp, mahony_ki):
-            self.filter_calls.append((complementary_alpha, mahony_kp, mahony_ki))
+        async def set_orientation_filter_params(
+            self, complementary_alpha, mahony_kp, mahony_ki, iir_cutoff_hz
+        ):
+            self.filter_calls.append((complementary_alpha, mahony_kp, mahony_ki, iir_cutoff_hz))
 
     async def run():
         app = FilterApp()
         backend = WebBackend(app)
 
         response = await backend.set_orientation_filter(
-            JsonRequest({"complementary_alpha": 0.97, "mahony_kp": 0.6, "mahony_ki": 0.02})
+            JsonRequest(
+                {
+                    "complementary_alpha": 0.97,
+                    "mahony_kp": 0.6,
+                    "mahony_ki": 0.02,
+                    "iir_cutoff_hz": 2.5,
+                }
+            )
         )
 
         assert response.status == 200
-        assert app.filter_calls == [(0.97, 0.6, 0.02)]
+        assert app.filter_calls == [(0.97, 0.6, 0.02, 2.5)]
         body = json.loads(response.text)
         assert body == {
             "ok": True,
             "complementary_alpha": 0.97,
             "mahony_kp": 0.6,
             "mahony_ki": 0.02,
+            "iir_cutoff_hz": 2.5,
         }
 
     asyncio.run(run())
@@ -429,7 +446,7 @@ def test_web_sample_json_marks_fields_outside_payload_as_null():
             flags=0,
             sequence=1,
             timestamp_ms=104,
-            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V2,
             payload_len=SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
             accel_x_mg=0,
             accel_y_mg=0,
@@ -437,6 +454,9 @@ def test_web_sample_json_marks_fields_outside_payload_as_null():
             pitch_naive_cdeg=-1234,
             roll_naive_cdeg=567,
             zenith_naive_cdeg=9012,
+            pitch_iir_cdeg=-1220,
+            roll_iir_cdeg=590,
+            zenith_iir_cdeg=9005,
             pitch_complementary_cdeg=-1200,
             roll_complementary_cdeg=600,
             zenith_complementary_cdeg=9000,
@@ -448,6 +468,7 @@ def test_web_sample_json_marks_fields_outside_payload_as_null():
         )
     )
     assert orientation["pitch_naive_cdeg"] == -1234
+    assert orientation["pitch_iir_cdeg"] == -1220
     assert orientation["roll_complementary_cdeg"] == 600
     assert orientation["yaw_mahony_cdeg"] == 42
     assert orientation["accel_norm_mg"] == 1001
