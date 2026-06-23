@@ -13,7 +13,7 @@
 | --- | --- |
 | Target | nRF52840 DK |
 | Board target | `nrf52840dk/nrf52840` |
-| SDK | NCS v3.2.2 |
+| SDK | NCS v3.2.3 |
 | RTOS | Zephyr |
 | BLE role | Peripheral / GATT Server |
 | Event framework | App Event Manager |

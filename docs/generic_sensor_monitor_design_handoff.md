@@ -55,7 +55,7 @@
 Firmware:
 
 - Target: nRF52840 DK
-- SDK: NCS v3.2.2
+- SDK: NCS v3.2.3
 - RTOS: Zephyr
 - Event framework: App Event Manager
 - Sensor: dummy accel + optional X-NUCLEO-IKS01A2 streams

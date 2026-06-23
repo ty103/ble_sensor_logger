@@ -25,7 +25,7 @@ PMエージェントの初期案に対し、FW/App/QAエージェントが実装
 
 ```mermaid
 flowchart LR
-    subgraph Device["nRF52840 DK / NCS v3.2.2 / Zephyr"]
+    subgraph Device["nRF52840 DK / NCS v3.2.3 / Zephyr"]
         Sensor["sensor_dummy module"]
         AEM["App Event Manager"]
         Ctrl["control module"]
@@ -409,7 +409,7 @@ python -m ble_sensor_logger --once monitor --name BLE_SENSOR_LOGGER --interval 1
 
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
-| NCS v3.2.2でAEM設定が不足 | FW build不可 | scaffold時にAEM最小サンプルを先に通す |
+| NCS v3.2.3でAEM設定が不足 | FW build不可 | scaffold時にAEM最小サンプルを先に通す |
 | nRF52840 DK専用APIへの依存 | 実ターゲット基板への移植コスト増 | Zephyr標準API、Devicetree、platform adapterのみを許可する |
 | PC OSごとのBLE挙動差 | 接続/再接続が不安定 | bleak backend差分をログ化し、macOS/Windows/Linux別注意をREADME化 |
 | Notification周期が短すぎる | 欠落やATT congestion | 初期下限20 ms、標準100 ms。送信失敗時はdrop count検討 |
@@ -430,7 +430,7 @@ python -m ble_sensor_logger --once monitor --name BLE_SENSOR_LOGGER --interval 1
 
 フェーズ3では以下を実装対象とする。
 
-1. `firmware/`にNCS v3.2.2向けZephyrプロジェクトを作成する。
+1. `firmware/`にNCS v3.2.3向けZephyrプロジェクトを作成する。
 2. `protocol`をC/Pythonで実装し、payload fixtureを共有する。
 3. AEMイベント定義とdummy sensor pipelineを構築する。
 4. BLE GATT serviceを実装し、Sensor Data NotificationとControl/Config Writeを接続する。

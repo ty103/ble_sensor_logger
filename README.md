@@ -4,7 +4,7 @@ nRF52840 DKのセンサデータをBLEで送信し、Python backendを介してC
 
 ## 現在の構成
 
-- Device: nRF52840 DK、NCS v3.2.2、Zephyr RTOS、App Event Manager
+- Device: nRF52840 DK、NCS v3.2.3、Zephyr RTOS、App Event Manager
 - Sensor: 疑似加速度、X-NUCLEO-IKS01A2接続時のLSM6DSL 6軸IMU（26 Hz）、HTS221 humidity/temperature（1 Hz）、LPS22HB pressure（1 Hz）、LSM303AGR magnetometer（10 Hz）
 - Protocol: Little Endian固定長binary、Sensor Data frame v3は16-24 bytes
 - PC backend: Python、bleak、aiohttp

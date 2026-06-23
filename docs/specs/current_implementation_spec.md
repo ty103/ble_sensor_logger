@@ -19,7 +19,7 @@
 | 要素 | 内容 |
 | --- | --- |
 | Device | nRF52840 DK |
-| Firmware SDK | NCS v3.2.2 / Zephyr |
+| Firmware SDK | NCS v3.2.3 / Zephyr |
 | Firmware event基盤 | App Event Manager |
 | Sensor | dummy accel、X-NUCLEO-IKS01A2上のLSM6DSL、HTS221、LPS22HB、LSM303AGR magnetometer |
 | BLE role | Peripheral / GATT Server |

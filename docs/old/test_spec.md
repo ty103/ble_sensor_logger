@@ -6,7 +6,7 @@
 
 | 領域 | 対象 |
 | --- | --- |
-| Firmware | nRF52840 DK (`nrf52840dk/nrf52840`) / NCS v3.2.2 / Zephyr / AEM |
+| Firmware | nRF52840 DK (`nrf52840dk/nrf52840`) / NCS v3.2.3 / Zephyr / AEM |
 | PC App | Python package `ble_sensor_logger` / bleak / interactive CUI / local WebGUI |
 | BLE | Sensor Logger Service and 4 characteristics |
 | Protocol | Sensor Data, Control, Config, Status fixed binary payload |
