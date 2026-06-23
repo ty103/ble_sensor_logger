@@ -1,3 +1,5 @@
+import * as THREE from "/static/vendor/three.module.min.js";
+
 const $ = (id) => document.getElementById(id);
 const elements = {
   connectionLabel: $("connectionLabel"),
@@ -17,6 +19,13 @@ const elements = {
   csvButton: $("csvButton"),
   csvState: $("csvState"),
   graphsGrid: $("graphsGrid"),
+  orientationCanvas: $("orientationCanvas"),
+  orientationState: $("orientationState"),
+  orientationMode: $("orientationMode"),
+  orientationPitch: $("orientationPitch"),
+  orientationRoll: $("orientationRoll"),
+  orientationZenith: $("orientationZenith"),
+  orientationAccel: $("orientationAccel"),
   toast: $("toast"),
 };
 
@@ -58,6 +67,64 @@ const fallbackCapability = {
         { field: "gyro_x_mdps", label: "LSM6DSL Gyro X", unit: "mdps", scale: 1, decimals: 0 },
         { field: "gyro_y_mdps", label: "LSM6DSL Gyro Y", unit: "mdps", scale: 1, decimals: 0 },
         { field: "gyro_z_mdps", label: "LSM6DSL Gyro Z", unit: "mdps", scale: 1, decimals: 0 },
+      ],
+      default_interval_ms: 38,
+      min_interval_ms: 38,
+      max_interval_ms: 38,
+    },
+    {
+      stream_id: 13,
+      stream_type: "ORIENTATION_MOTION",
+      fields: [
+        {
+          field: "pitch_naive_cdeg",
+          label: "Orientation Pitch Naive",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "roll_naive_cdeg",
+          label: "Orientation Roll Naive",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "zenith_naive_cdeg",
+          label: "Orientation Zenith Naive",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "pitch_filtered_cdeg",
+          label: "Orientation Pitch Filtered",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "roll_filtered_cdeg",
+          label: "Orientation Roll Filtered",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "zenith_filtered_cdeg",
+          label: "Orientation Zenith Filtered",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "accel_norm_mg",
+          label: "Orientation Accel Norm",
+          unit: "mg",
+          scale: 1,
+          decimals: 0,
+        },
       ],
       default_interval_ms: 38,
       min_interval_ms: 38,
@@ -139,6 +206,15 @@ const graphElements = Array.from(document.querySelectorAll(".graph-panel")).map(
   canvas: panel.querySelector('[data-role="graph-canvas"]'),
   summary: panel.querySelector('[data-role="graph-summary"]'),
 }));
+const orientationState = {
+  renderer: null,
+  scene: null,
+  camera: null,
+  cuboid: null,
+  edgeLines: null,
+  lastSample: null,
+  unavailable: false,
+};
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -267,6 +343,7 @@ function renderCapability(capability, fromDevice) {
 
   renderStreamControls();
   renderGraphSignalControls();
+  updateOrientationView();
   drawCharts();
 }
 
@@ -436,6 +513,130 @@ function updateMetric(definition, sample) {
   if (value !== null) $(`latest_${definition.metricId}`).textContent = formatValue(value, definition);
 }
 
+function hasOrientationCapability() {
+  return fieldDefinitions.some((definition) => definition.streamId === 13);
+}
+
+function setupOrientationScene() {
+  if (!elements.orientationCanvas || orientationState.renderer || orientationState.unavailable) return;
+  try {
+    const renderer = new THREE.WebGLRenderer({
+      canvas: elements.orientationCanvas,
+      antialias: true,
+      preserveDrawingBuffer: true,
+    });
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf8fafb);
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+    camera.position.set(3.4, 2.2, 4.2);
+    camera.lookAt(0, 0, 0);
+
+    const cuboid = new THREE.Mesh(
+      new THREE.BoxGeometry(2.8, 0.34, 1.5),
+      [
+        new THREE.MeshStandardMaterial({ color: 0x2f6fb5, roughness: 0.58 }),
+        new THREE.MeshStandardMaterial({ color: 0x176b5b, roughness: 0.58 }),
+        new THREE.MeshStandardMaterial({ color: 0xb7c4cc, roughness: 0.62 }),
+        new THREE.MeshStandardMaterial({ color: 0xf0f4f6, roughness: 0.62 }),
+        new THREE.MeshStandardMaterial({ color: 0xa8482d, roughness: 0.52 }),
+        new THREE.MeshStandardMaterial({ color: 0xf2c94c, roughness: 0.52 }),
+      ]
+    );
+    const edgeLines = new THREE.LineSegments(
+      new THREE.EdgesGeometry(cuboid.geometry),
+      new THREE.LineBasicMaterial({ color: 0x26333d })
+    );
+    cuboid.add(edgeLines);
+    scene.add(cuboid);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xb7c4cc, 2.5));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.6);
+    keyLight.position.set(3, 5, 4);
+    scene.add(keyLight);
+    const grid = new THREE.GridHelper(4.2, 6, 0xcfd8de, 0xe4eaee);
+    grid.position.y = -0.72;
+    scene.add(grid);
+
+    orientationState.renderer = renderer;
+    orientationState.scene = scene;
+    orientationState.camera = camera;
+    orientationState.cuboid = cuboid;
+    orientationState.edgeLines = edgeLines;
+  } catch (error) {
+    orientationState.unavailable = true;
+    elements.orientationState.textContent = "3D renderer unavailable";
+  }
+}
+
+function renderOrientationScene() {
+  setupOrientationScene();
+  if (!orientationState.renderer) return;
+  const canvas = elements.orientationCanvas;
+  const width = Math.max(320, Math.floor(canvas.clientWidth));
+  const height = Math.max(240, Math.floor(canvas.clientHeight));
+  orientationState.renderer.setPixelRatio(window.devicePixelRatio || 1);
+  orientationState.renderer.setSize(width, height, false);
+  orientationState.camera.aspect = width / height;
+  orientationState.camera.updateProjectionMatrix();
+  orientationState.renderer.render(orientationState.scene, orientationState.camera);
+}
+
+function orientationRawValue(sample, field) {
+  return sample ? numericValue(sample, field, 13) : null;
+}
+
+function orientationAngle(sample, filteredField, naiveField) {
+  const filtered = orientationRawValue(sample, filteredField);
+  if (filtered !== null) return { value: filtered * 0.01, mode: "Filtered" };
+  const naive = orientationRawValue(sample, naiveField);
+  if (naive !== null) return { value: naive * 0.01, mode: "Naive" };
+  return { value: null, mode: "Waiting" };
+}
+
+function setOrientationReadout(pitch, roll, zenith, accel, mode) {
+  elements.orientationMode.textContent = mode;
+  elements.orientationPitch.textContent = pitch.value === null ? "--" : pitch.value.toFixed(2);
+  elements.orientationRoll.textContent = roll.value === null ? "--" : roll.value.toFixed(2);
+  elements.orientationZenith.textContent = zenith.value === null ? "--" : zenith.value.toFixed(2);
+  elements.orientationAccel.textContent = accel === null ? "--" : String(Math.round(accel));
+}
+
+function updateOrientationView(sample = null) {
+  if (!elements.orientationCanvas) return;
+  if (sample?.stream_id === 13) orientationState.lastSample = sample;
+  const source = sample?.stream_id === 13 ? sample : orientationState.lastSample;
+
+  if (!hasOrientationCapability()) {
+    elements.orientationState.textContent = "Orientation stream unavailable";
+    setOrientationReadout({ value: null }, { value: null }, { value: null }, null, "--");
+    renderOrientationScene();
+    return;
+  }
+
+  if (!source) {
+    elements.orientationState.textContent = "Waiting for orientation sample";
+    setOrientationReadout({ value: null }, { value: null }, { value: null }, null, "Waiting");
+    renderOrientationScene();
+    return;
+  }
+
+  const pitch = orientationAngle(source, "pitch_filtered_cdeg", "pitch_naive_cdeg");
+  const roll = orientationAngle(source, "roll_filtered_cdeg", "roll_naive_cdeg");
+  const zenith = orientationAngle(source, "zenith_filtered_cdeg", "zenith_naive_cdeg");
+  const accel = orientationRawValue(source, "accel_norm_mg");
+  const usesFiltered = pitch.mode === "Filtered" && roll.mode === "Filtered";
+  const mode = usesFiltered ? "Filtered" : "Naive";
+  setOrientationReadout(pitch, roll, zenith, accel, mode);
+  elements.orientationState.textContent = `${mode} sample #${source.sequence ?? "--"}`;
+
+  setupOrientationScene();
+  if (orientationState.cuboid && pitch.value !== null && roll.value !== null) {
+    orientationState.cuboid.rotation.x = THREE.MathUtils.degToRad(roll.value);
+    orientationState.cuboid.rotation.y = 0;
+    orientationState.cuboid.rotation.z = THREE.MathUtils.degToRad(-pitch.value);
+  }
+  renderOrientationScene();
+}
+
 async function scan() {
   elements.scanButton.disabled = true;
   try {
@@ -473,6 +674,7 @@ function updateSample(sample) {
   fieldDefinitions.forEach((definition) => updateMetric(definition, sample));
   $("sampleCount").textContent = history.length;
   $("missedCount").textContent = sample.missed_samples;
+  updateOrientationView(sample);
   if (csvRecording) {
     csvSamples.push(sample);
     elements.csvState.textContent = `Recording · ${csvSamples.length}`;
@@ -796,7 +998,9 @@ elements.applyIntervalButton.addEventListener("click", () =>
 elements.refreshStatusButton.addEventListener("click", refreshStatus);
 elements.clearButton.addEventListener("click", () => {
   history.length = 0;
+  orientationState.lastSample = null;
   $("sampleCount").textContent = "0";
+  updateOrientationView();
   drawCharts();
 });
 elements.csvButton.addEventListener("click", toggleCsvRecording);
@@ -813,10 +1017,14 @@ graphElements.forEach((graph, index) => {
   graph.yMaxInput.addEventListener("input", redraw);
   graph.xSecondsInput.addEventListener("input", redraw);
 });
-window.addEventListener("resize", drawCharts);
+window.addEventListener("resize", () => {
+  drawCharts();
+  renderOrientationScene();
+});
 
 updateConnection(false);
 renderCapability(fallbackCapability, false);
 connectSocket();
 refreshStatus();
 drawCharts();
+renderOrientationScene();

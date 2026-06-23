@@ -259,7 +259,7 @@ Characteristic: Capability Read
 Python header struct format: `<BBHBBHHH`
 Python stream struct format: `<BBBBBBHHHHbB`
 
-CapabilityはGeneric Sensor Monitor化の最初の足場として追加したschema v1である。現時点では `DUMMY_ACCEL3_INT16_V1` を常時記述し、Firmware起動時にLSM6DSLがreadyになった場合のみ `IMU6_INT16_V1`、HTS221がreadyになった場合のみ `HTS221_TEMP_HUMIDITY_INT16_V1`、LPS22HBがreadyになった場合のみ `LPS22HB_PRESSURE_INT32_V1`、LSM303AGR magnetometerがreadyになった場合のみ `MAG3_INT16_V1` を追加streamとして記述する。
+CapabilityはGeneric Sensor Monitor化の最初の足場として追加したschema v1である。現時点では `DUMMY_ACCEL3_INT16_V1` を常時記述し、Firmware起動時にLSM6DSLがreadyになった場合のみ `IMU6_INT16_V1` と `ORIENTATION_MOTION_INT16_V1`、HTS221がreadyになった場合のみ `HTS221_TEMP_HUMIDITY_INT16_V1`、LPS22HBがreadyになった場合のみ `LPS22HB_PRESSURE_INT32_V1`、LSM303AGR magnetometerがreadyになった場合のみ `MAG3_INT16_V1` を追加streamとして記述する。
 
 Firmware Capability schema v1は、stream単位のmetadataまでを表す固定長binary schemaとする。WebGUI/CSVで使うfield単位のlabel、unit、scale、decimal表現は、PC backendが `payload_format` から補完して `/api/capability` の `streams[].fields[]` に付与する。Firmware由来のfield descriptorが必要になった場合は、schema v1へ後付けせず、Capability schema version 2またはTLV化として別途設計する。
 
@@ -270,18 +270,18 @@ Header:
 | 0 | 1 | uint8 | version | `3` |
 | 1 | 1 | uint8 | schema_version | `1` |
 | 2 | 2 | uint16 | capability_flags | bit0 custom GATT、bit1 fixed binary |
-| 4 | 1 | uint8 | stream_count | `1` から `5` |
+| 4 | 1 | uint8 | stream_count | `1` から `6` |
 | 5 | 1 | uint8 | reserved | `0` |
 | 6 | 2 | uint16 | supported_commands | command値をbit位置にしたbitmask |
 | 8 | 2 | uint16 | supported_features | bit0 interval config、bit1 status read、bit2 sensor notify |
-| 10 | 2 | uint16 | preferred_mtu | 現行ではSensor Data frame v3 max sizeの24 |
+| 10 | 2 | uint16 | preferred_mtu | 現行ではSensor Data frame v3 max sizeの26 |
 
 Stream descriptor共通形式:
 
 | Offset | Size | 型 | 名称 | 説明 |
 | ---: | ---: | --- | --- | --- |
 | 12 | 1 | uint8 | stream_id | stream識別子 |
-| 13 | 1 | uint8 | stream_type | `1` = DUMMY_ACCEL3、`2` = IMU6、`3` = TEMP_HUMIDITY、`4` = PRESSURE、`5` = MAG3 |
+| 13 | 1 | uint8 | stream_type | `1` = DUMMY_ACCEL3、`2` = IMU6、`3` = TEMP_HUMIDITY、`4` = PRESSURE、`5` = MAG3、`6` = ORIENTATION_MOTION |
 | 14 | 1 | uint8 | channel_count | stream内channel数 |
 | 15 | 1 | uint8 | data_type | `1` = INT16、`2` = INT32 |
 | 16 | 1 | uint8 | unit | `0` = MIXED、`1` = PA、`2` = UT、`3` = MG |
@@ -411,6 +411,7 @@ uv run --extra dev \
 - Capability metadataに基づく最新値表示
 - Capability metadataに基づくSignal選択とリアルタイムchart表示。最大3個のgraphを描画でき、各graphは最大3つのSignalを選択できる
 - GraphごとにY軸rangeのAuto/manual指定、X軸rangeのAuto/任意秒数window指定
+- `stream_id=13` のorientation field metadataがある場合の3D cuboid表示。WebGUI fallback Capabilityにはorientation fieldを含めるが、実backendからのlive更新はPC backend/Firmware統合後に確認する
 - 最大5000点のchart履歴
 - CSV記録開始/停止とdownload
 
@@ -422,7 +423,7 @@ timestamp_ms,payload_format,payload_len,<stream-qualified Capability fields...>,
 missed_samples
 ```
 
-`<stream-qualified Capability fields...>` は `/api/capability` の `streams[].fields[]` をstream順に展開した列で、列名は `s<stream_id>_<field>` とする。現行fallbackでは `s1_accel_x_mg`、`s1_accel_y_mg`、`s1_accel_z_mg`、`s10_accel_x_mg`、`s10_accel_y_mg`、`s10_accel_z_mg`、`s10_gyro_x_mdps`、`s10_gyro_y_mdps`、`s10_gyro_z_mdps`、`s30_humidity_centi_percent`、`s30_temperature_centi_c`、`s20_pressure_pa`、`s12_mag_x_ut`、`s12_mag_y_ut`、`s12_mag_z_ut` を含む。sample行と一致しないstreamの値列は空欄にする。CSVは単一wide CSVとしてdownloadし、stream別CSV分割は現時点では行わない。
+`<stream-qualified Capability fields...>` は `/api/capability` の `streams[].fields[]` をstream順に展開した列で、列名は `s<stream_id>_<field>` とする。現行fallbackでは `s1_accel_x_mg`、`s1_accel_y_mg`、`s1_accel_z_mg`、`s10_accel_x_mg`、`s10_accel_y_mg`、`s10_accel_z_mg`、`s10_gyro_x_mdps`、`s10_gyro_y_mdps`、`s10_gyro_z_mdps`、`s13_pitch_naive_cdeg`、`s13_roll_naive_cdeg`、`s13_zenith_naive_cdeg`、`s13_pitch_filtered_cdeg`、`s13_roll_filtered_cdeg`、`s13_zenith_filtered_cdeg`、`s13_accel_norm_mg`、`s30_humidity_centi_percent`、`s30_temperature_centi_c`、`s20_pressure_pa`、`s12_mag_x_ut`、`s12_mag_y_ut`、`s12_mag_z_ut` を含む。sample行と一致しないstreamの値列は空欄にする。CSVは単一wide CSVとしてdownloadし、stream別CSV分割は現時点では行わない。
 
 ## 10. 受け入れ条件
 

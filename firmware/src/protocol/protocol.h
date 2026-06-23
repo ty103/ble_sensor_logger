@@ -17,17 +17,18 @@
 #define BSL_SENSOR_DATA_HEADER_SIZE 12
 #define BSL_SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE 6
 #define BSL_SENSOR_IMU6_SAMPLE_SIZE 12
+#define BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE 14
 #define BSL_SENSOR_MAG3_SAMPLE_SIZE 6
 #define BSL_SENSOR_HTS221_SAMPLE_SIZE 4
 #define BSL_SENSOR_LPS22HB_SAMPLE_SIZE 4
-#define BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE BSL_SENSOR_IMU6_SAMPLE_SIZE
+#define BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
 #define BSL_SENSOR_DATA_SIZE (BSL_SENSOR_DATA_HEADER_SIZE + BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE)
 #define BSL_CONTROL_SIZE 4
 #define BSL_CONFIG_SIZE 8
 #define BSL_STATUS_SIZE 16
 #define BSL_CAPABILITY_HEADER_SIZE 12
 #define BSL_CAPABILITY_STREAM_SIZE 16
-#define BSL_CAPABILITY_MAX_STREAMS 5
+#define BSL_CAPABILITY_MAX_STREAMS 6
 #define BSL_CAPABILITY_SIZE \
 	(BSL_CAPABILITY_HEADER_SIZE + (BSL_CAPABILITY_STREAM_SIZE * BSL_CAPABILITY_MAX_STREAMS))
 
@@ -39,6 +40,7 @@
 
 #define BSL_STREAM_ID_DUMMY_ACCEL3 1
 #define BSL_STREAM_ID_LSM6DSL_IMU6 10
+#define BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION 13
 #define BSL_STREAM_ID_LSM303AGR_MAG3 12
 #define BSL_STREAM_ID_LPS22HB_PRESSURE 20
 #define BSL_STREAM_ID_HTS221_TEMP_HUMIDITY 30
@@ -104,6 +106,7 @@ enum bsl_stream_type {
 	BSL_STREAM_TYPE_TEMP_HUMIDITY = 3,
 	BSL_STREAM_TYPE_PRESSURE = 4,
 	BSL_STREAM_TYPE_MAG3 = 5,
+	BSL_STREAM_TYPE_ORIENTATION_MOTION = 6,
 };
 
 enum bsl_stream_data_type {
@@ -124,6 +127,7 @@ enum bsl_payload_format {
 	BSL_PAYLOAD_FORMAT_HTS221_TEMP_HUMIDITY_INT16_V1 = 3,
 	BSL_PAYLOAD_FORMAT_LPS22HB_PRESSURE_INT32_V1 = 4,
 	BSL_PAYLOAD_FORMAT_MAG3_INT16_V1 = 5,
+	BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1 = 6,
 };
 
 enum bsl_stream_flag {
@@ -157,6 +161,16 @@ struct bsl_imu6_sample {
 	int16_t gyro_z_mdps;
 } BSL_PACKED;
 
+struct bsl_orientation_motion_sample {
+	int16_t pitch_naive_cdeg;
+	int16_t roll_naive_cdeg;
+	int16_t zenith_naive_cdeg;
+	int16_t pitch_filtered_cdeg;
+	int16_t roll_filtered_cdeg;
+	int16_t zenith_filtered_cdeg;
+	int16_t accel_norm_mg;
+} BSL_PACKED;
+
 struct bsl_mag3_sample {
 	int16_t mag_x_uT;
 	int16_t mag_y_uT;
@@ -177,6 +191,7 @@ struct bsl_sensor_data {
 	union {
 		struct bsl_dummy_accel3_sample dummy_accel3;
 		struct bsl_imu6_sample imu6;
+		struct bsl_orientation_motion_sample orientation_motion;
 		struct bsl_mag3_sample mag3;
 		struct bsl_hts221_sample hts221;
 		struct bsl_lps22hb_sample lps22hb;

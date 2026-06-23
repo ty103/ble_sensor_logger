@@ -127,6 +127,25 @@ class InteractiveShell:
                 print(f"unknown command: {command}")
 
     def _print_sample(self, sample: SensorDataPayload) -> None:
+        if sample.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1:
+            print(
+                "stream={} seq={:5d} timestamp={:8d}ms naive=({:7.2f},{:7.2f},{:7.2f})deg "
+                "filtered=({:7.2f},{:7.2f},{:7.2f})deg accel_norm={:5d}mg missed={}".format(
+                    sample.stream_id,
+                    sample.sequence,
+                    sample.timestamp_ms,
+                    sample.pitch_naive_cdeg / 100,
+                    sample.roll_naive_cdeg / 100,
+                    sample.zenith_naive_cdeg / 100,
+                    sample.pitch_filtered_cdeg / 100,
+                    sample.roll_filtered_cdeg / 100,
+                    sample.zenith_filtered_cdeg / 100,
+                    sample.accel_norm_mg,
+                    self.app.state.missed_samples,
+                )
+            )
+            return
+
         if sample.payload_format == PayloadFormat.MAG3_INT16_V1:
             print(
                 "stream={} seq={:5d} timestamp={:8d}ms mag=({:5d},{:5d},{:5d})uT missed={}".format(

@@ -10,6 +10,7 @@ from ble_sensor_logger.protocol import (
     SENSOR_IMU6_SAMPLE_SIZE,
     SENSOR_LPS22HB_SAMPLE_SIZE,
     SENSOR_MAG3_SAMPLE_SIZE,
+    SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
     SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE,
     SENSOR_DATA_SIZE,
     STATUS_SIZE,
@@ -32,10 +33,11 @@ def test_payload_sizes_match_spec():
     assert SENSOR_DATA_HEADER_SIZE == 12
     assert SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE == 6
     assert SENSOR_IMU6_SAMPLE_SIZE == 12
+    assert SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE == 14
     assert SENSOR_MAG3_SAMPLE_SIZE == 6
     assert SENSOR_HTS221_SAMPLE_SIZE == 4
     assert SENSOR_LPS22HB_SAMPLE_SIZE == 4
-    assert SENSOR_DATA_SIZE == 24
+    assert SENSOR_DATA_SIZE == 26
     assert CONTROL_SIZE == 4
     assert CONFIG_SIZE == 8
     assert STATUS_SIZE == 16
@@ -146,6 +148,33 @@ def test_mag3_sensor_data_round_trip():
     packed = payload.pack()
 
     assert len(packed) == SENSOR_DATA_HEADER_SIZE + SENSOR_MAG3_SAMPLE_SIZE
+    assert SensorDataPayload.unpack(packed) == payload
+
+
+def test_orientation_motion_sensor_data_round_trip():
+    payload = SensorDataPayload(
+        version=3,
+        message_type=MessageType.SENSOR_SAMPLE,
+        stream_id=13,
+        flags=0,
+        sequence=6,
+        timestamp_ms=792,
+        payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+        payload_len=SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
+        accel_x_mg=0,
+        accel_y_mg=0,
+        accel_z_mg=0,
+        pitch_naive_cdeg=-1234,
+        roll_naive_cdeg=567,
+        zenith_naive_cdeg=9012,
+        pitch_filtered_cdeg=-1200,
+        roll_filtered_cdeg=600,
+        zenith_filtered_cdeg=9000,
+        accel_norm_mg=1001,
+    )
+    packed = payload.pack()
+
+    assert len(packed) == SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
     assert SensorDataPayload.unpack(packed) == payload
 
 
@@ -266,10 +295,15 @@ def test_capability_round_trip():
     assert parsed.streams[0].payload_format.name == "DUMMY_ACCEL3_INT16_V1"
     assert parsed.streams[1].stream_id == 10
     assert parsed.streams[1].payload_format.name == "IMU6_INT16_V1"
-    assert parsed.streams[2].stream_id == 30
-    assert parsed.streams[2].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
-    assert parsed.streams[3].stream_id == 20
-    assert parsed.streams[3].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
-    assert parsed.streams[4].stream_id == 12
-    assert parsed.streams[4].payload_format.name == "MAG3_INT16_V1"
+    assert parsed.streams[2].stream_id == 13
+    assert parsed.streams[2].stream_type.name == "ORIENTATION_MOTION"
+    assert parsed.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
+    assert parsed.streams[2].channel_count == 7
+    assert parsed.streams[3].stream_id == 30
+    assert parsed.streams[3].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
+    assert parsed.streams[4].stream_id == 20
+    assert parsed.streams[4].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
+    assert parsed.streams[5].stream_id == 12
+    assert parsed.streams[5].payload_format.name == "MAG3_INT16_V1"
+    assert parsed.preferred_mtu == SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
     assert parsed.supported_commands & (1 << int(Command.START_MEASUREMENT))

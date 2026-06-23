@@ -12,4 +12,20 @@ config BSL_IKS01A2_I2C_PROBE
 	  logic analyzer, and RTT/VCOM diagnostics, not for normal streaming
 	  firmware.
 
+config BSL_ORIENTATION_FRONT_AXIS
+	string "Device front axis for LSM6DSL orientation stream"
+	default "+X"
+	help
+	  Select the LSM6DSL raw accelerometer axis that points toward the
+	  device front direction. Valid values are +X, -X, +Y, -Y, +Z, and -Z.
+
+config BSL_ORIENTATION_GRAVITY_AXIS
+	string "Device gravity axis for LSM6DSL orientation stream"
+	default "+Z"
+	help
+	  Select the LSM6DSL raw accelerometer axis that matches the gravity
+	  direction in the reference posture. Valid values are +X, -X, +Y, -Y,
+	  +Z, and -Z. This must not use the same physical axis as the front
+	  axis.
+
 endmenu

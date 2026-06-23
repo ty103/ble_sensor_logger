@@ -7,6 +7,7 @@ from ble_sensor_logger.protocol import (
     SENSOR_IMU6_SAMPLE_SIZE,
     SENSOR_LPS22HB_SAMPLE_SIZE,
     SENSOR_MAG3_SAMPLE_SIZE,
+    SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
     CapabilityPayload,
     ConfigPayload,
     MessageType,
@@ -135,6 +136,26 @@ def test_sequence_gap_tracking_is_per_stream():
         SensorDataPayload(
             version=3,
             message_type=MessageType.SENSOR_SAMPLE,
+            stream_id=13,
+            flags=0,
+            sequence=1,
+            timestamp_ms=105,
+            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+            payload_len=SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
+            accel_x_mg=0,
+            accel_y_mg=0,
+            accel_z_mg=0,
+            pitch_naive_cdeg=-1234,
+            roll_naive_cdeg=567,
+            zenith_naive_cdeg=9012,
+            pitch_filtered_cdeg=-1200,
+            roll_filtered_cdeg=600,
+            zenith_filtered_cdeg=9000,
+            accel_norm_mg=1001,
+        ),
+        SensorDataPayload(
+            version=3,
+            message_type=MessageType.SENSOR_SAMPLE,
             stream_id=1,
             flags=0,
             sequence=2,
@@ -206,6 +227,26 @@ def test_sequence_gap_tracking_is_per_stream():
             mag_y_ut=-5,
             mag_z_ut=43,
         ),
+        SensorDataPayload(
+            version=3,
+            message_type=MessageType.SENSOR_SAMPLE,
+            stream_id=13,
+            flags=0,
+            sequence=2,
+            timestamp_ms=205,
+            payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+            payload_len=SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
+            accel_x_mg=0,
+            accel_y_mg=0,
+            accel_z_mg=0,
+            pitch_naive_cdeg=-1233,
+            roll_naive_cdeg=568,
+            zenith_naive_cdeg=9011,
+            pitch_filtered_cdeg=-1199,
+            roll_filtered_cdeg=601,
+            zenith_filtered_cdeg=8999,
+            accel_norm_mg=1002,
+        ),
     )
 
     for sample in samples:
@@ -217,11 +258,13 @@ def test_sequence_gap_tracking_is_per_stream():
         (30, 1),
         (20, 1),
         (12, 1),
+        (13, 1),
         (1, 2),
         (10, 2),
         (30, 2),
         (20, 2),
         (12, 2),
+        (13, 2),
     ]
     assert app.state.missed_samples == 0
 
@@ -239,9 +282,10 @@ def test_read_capability_uses_client_payload():
         assert capability.schema_version == 1
         assert capability.streams[0].payload_format.name == "DUMMY_ACCEL3_INT16_V1"
         assert capability.streams[1].payload_format.name == "IMU6_INT16_V1"
-        assert capability.streams[2].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
-        assert capability.streams[3].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
-        assert capability.streams[4].payload_format.name == "MAG3_INT16_V1"
+        assert capability.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
+        assert capability.streams[3].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
+        assert capability.streams[4].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
+        assert capability.streams[5].payload_format.name == "MAG3_INT16_V1"
 
     asyncio.run(run())
 

@@ -598,11 +598,11 @@ codex/webgui-capability-driven
 1. LSM6DSL派生姿勢stream `stream_id=13` をFirmware/PC/WebGUIへ追加する。
    - 実装前に、相補フィルタでLSM6DSL gyroを補助入力として使う方針でよいかを確認する。3軸加速度のみを厳密条件にする場合は、filtered pitch/rollの定義をLPF姿勢などへ変更する。
    - 並行開発前提の進め方:
-     - [ ] まずこのhandoffの `stream_id=13` interface lockを正とし、docs-onlyの準備commitを共通baseへ入れる。その後、Firmware / PC backend / WebGUIの各チャットは同じbase commitから作業branchまたはworktreeを作る。
-     - [ ] 推奨branch名は `codex/stream13-firmware`、`codex/stream13-pc-backend`、`codex/stream13-webgui`、統合用は `codex/stream13-orientation-integration` とする。実装branch同士を直接mergeせず、統合branchへ順に取り込む。
-     - [ ] interface lockを変更したくなった場合は、個別branch内で独自判断せず、先にhandoffを更新して3タスクへ周知する。特に `stream_id`、`stream_type`、`payload_format`、payload byte order、field名、scale、CSV列名、Capability stream descriptorは固定契約として扱う。
-     - [ ] 取り込み順は、PC backend -> Firmware -> WebGUIを基本とする。PC backendはsynthetic frame/Capabilityで先にparserとmetadataを固め、Firmware取り込み後にBLE smokeを行い、最後にWebGUIを実backend + 実ブラウザで確認する。
-     - [ ] 最終的な `master` mergeは、統合branchでPC自動テスト、Firmware shield build、flash、BLE smoke、WebGUI実ブラウザ確認が済み、最後にユーザー実機確認が完了してから行う。
+     - [x] まずこのhandoffの `stream_id=13` interface lockを正とし、docs-onlyの準備commitを共通baseへ入れる。その後、Firmware / PC backend / WebGUIの各チャットは同じbase commitから作業branchまたはworktreeを作る。
+     - [x] 推奨branch名は `codex/stream13-firmware`、`codex/stream13-pc-backend`、`codex/stream13-webgui`、統合用は `codex/stream13-orientation-integration` とする。実装branch同士を直接mergeせず、統合branchへ順に取り込む。
+     - [x] interface lockを変更したくなった場合は、個別branch内で独自判断せず、先にhandoffを更新して3タスクへ周知する。特に `stream_id`、`stream_type`、`payload_format`、payload byte order、field名、scale、CSV列名、Capability stream descriptorは固定契約として扱う。
+     - [x] 取り込み順は、PC backend -> Firmware -> WebGUIを基本とする。PC backendはsynthetic frame/Capabilityで先にparserとmetadataを固め、Firmware取り込み後にBLE smokeを行い、最後にWebGUIを実backend + 実ブラウザで確認する。
+     - [x] 最終的な `master` mergeは、統合branchでPC自動テスト、Firmware shield build、flash、BLE smoke、WebGUI実ブラウザ確認が済み、最後にユーザー実機確認が完了してから行う。
    - `stream_id=13` interface lock:
      - `stream_id`: `13`
      - `stream_type`: `ORIENTATION_MOTION` / enum value `6`
@@ -643,26 +643,31 @@ codex/webgui-capability-driven
      - WebGUI taskは `pc_app/web_frontend/` を主に編集し、Python backendのprotocol/parserは触らない。開発中はfallback Capabilityまたはfixture sampleで3D表示を確認し、統合後に実backendへ接続して確認する。
      - `pc_app/tests/test_web_api.py` はPC backendとWebGUIの両方が触りやすいので、PC backend側はAPI JSON/field metadata、WebGUI側はstatic asset/HTML/JS存在確認に範囲を限定する。重複変更が出た場合は統合branchで解消する。
    - Firmware task:
-     - [ ] `firmware/src/protocol/protocol.h` / `protocol.c` に `BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION=13`、`BSL_STREAM_TYPE_ORIENTATION_MOTION`、`BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1`、14 bytes payload、`BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE` 更新、`BSL_CAPABILITY_MAX_STREAMS=6` を追加する。
-     - [ ] LSM6DSL sampling pathでIMU6 sampleと同じfetch結果からorientation sampleを生成し、measurement start/stop、sequence reset、availabilityをLSM6DSL streamと同期する。
-     - [ ] KConfigで `CONFIG_BSL_ORIENTATION_FRONT_AXIS` と `CONFIG_BSL_ORIENTATION_GRAVITY_AXIS` を追加し、`+X/-X/+Y/-Y/+Z/-Z` から選べるようにする。同じ物理軸の組み合わせはbuild時またはinit時に拒否する。
-     - [ ] naive pitch/roll/zenith、filtered pitch/roll、filtered pitch/roll由来zenith、`accel_norm_mg` を固定小数点で計算し、int16範囲へclampする。
-     - [ ] build/flash/RTTの初動では `firmware/docs/ai_quickstart.md` と `firmware/docs/build_flash_rtt_runbook.md` を参照し、ホーム配下の個人Skillに依存しない。
+     - [x] `firmware/src/protocol/protocol.h` / `protocol.c` に `BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION=13`、`BSL_STREAM_TYPE_ORIENTATION_MOTION`、`BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1`、14 bytes payload、`BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE` 更新、`BSL_CAPABILITY_MAX_STREAMS=6` を追加する。
+     - [x] LSM6DSL sampling pathでIMU6 sampleと同じfetch結果からorientation sampleを生成し、measurement start/stop、sequence reset、availabilityをLSM6DSL streamと同期する。
+     - [x] KConfigで `CONFIG_BSL_ORIENTATION_FRONT_AXIS` と `CONFIG_BSL_ORIENTATION_GRAVITY_AXIS` を追加し、`+X/-X/+Y/-Y/+Z/-Z` から選べるようにする。同じ物理軸の組み合わせはbuild時またはinit時に拒否する。
+     - [x] naive pitch/roll/zenith、filtered pitch/roll、filtered pitch/roll由来zenith、`accel_norm_mg` を固定小数点で計算し、int16範囲へclampする。
+     - [x] build/flash/RTTの初動では `firmware/docs/ai_quickstart.md` と `firmware/docs/runbooks/` を参照し、ホーム配下の個人Skillに依存しない。
+     - 2026-06-23 `codex/stream13-firmware`: Firmware側実装を追加済み。PC backend/WebGUIのprotocol対応は別taskの担当境界として未実施のため、このbranch単体では実機BLE smokeはまだ行わない。
    - PC backend task:
-     - [ ] `pc_app/src/ble_sensor_logger/protocol.py` にpayload format、parse/pack、validation、default Capabilityを追加する。
-     - [ ] `pc_app/src/ble_sensor_logger/web_api.py` にfield metadataを追加し、角度はdegree表示、合成加速度はmg表示にscaleする。
-     - [ ] CUI表示、BLE smoke、negative smoke、protocol/web/app_core pytestを更新する。
+     - [x] `pc_app/src/ble_sensor_logger/protocol.py` にpayload format、parse/pack、validation、default Capabilityを追加する。
+     - [x] `pc_app/src/ble_sensor_logger/web_api.py` にfield metadataを追加し、角度はdegree表示、合成加速度はmg表示にscaleする。
+     - [x] CUI表示、BLE smoke、protocol/web/app_core pytestを更新する。negative smokeはmalformed write中心のため変更不要。
+     - [x] 2026-06-23: `codex/stream13-pc-backend` でsynthetic frame/CapabilityによるPC自動テストを実施し、`uv run --extra dev pytest` が31件pass。Firmware/WebGUI統合と実機BLE smokeは未実施。
    - WebGUI task:
-     - [ ] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
-     - [ ] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
-     - [ ] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
+     - [x] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
+     - [x] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
+     - [x] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
+     - [x] 統合後、実backendからの `/api/capability` と WebSocket sampleで `stream_id=13` の最新値、graph、CSV列、3D cuboidが更新されることを実ブラウザで確認する。
    - 検証task:
-     - [ ] `pc_app/` で `uv run --extra dev pytest` を実行する。
-     - [ ] Web frontendの構文確認を行う。
-     - [ ] Firmware shield buildを行う。
-     - [ ] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6` と `stream_id=13` を確認する。
-     - [ ] BLE smokeで `stream_id=10` と `stream_id=13` のsampleが同じ測定中に流れること、CSVに `s13_*` 列が出ることを確認する。
-     - [ ] WebGUIを実ブラウザで確認し、数値表示、graph、3D cuboidが更新されることをPlaywright screenshotまたは同等の方法で確認する。
+     - [x] `pc_app/` で `uv run --extra dev pytest` を実行する。統合branchで32件pass。
+     - [x] Web frontendの構文確認を行う。`node --check pc_app/web_frontend/app.js` 成功。
+     - [x] Firmware shield buildを行う。`build/stream13-integration` で成功。
+     - [x] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6` と `stream_id=13` を確認する。
+     - [x] BLE smokeで `stream_id=10` と `stream_id=13` のsampleが同じ測定中に流れること、CSVに `s13_*` 列が出ることを確認する。
+     - [x] WebGUIを実ブラウザで確認し、数値表示、graph、3D cuboidが更新されることをPlaywright screenshotまたは同等の方法で確認する。
+     - 2026-06-23 `codex/stream13-firmware`で `pc_app` の `uv run --extra dev pytest` は30件成功、Firmware shield buildは `build/firmware-stream13` で成功。`firmware/.env` はこのworktreeに無かったため、NCS v3.2.2 / toolchain `e5f4758bcf` の環境変数をshell内で明示した。
+     - 2026-06-23 `codex/stream13-orientation-integration`で3 worktree成果を取り込み、PC自動テスト32件、Web frontend構文確認、Firmware shield build、flash、BLE smoke、実ブラウザ確認まで完了。`master` / `main` へのmergeはユーザー実機確認後に行う。
 
 2. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
    - Config v4次段候補: `SET_STREAM_ENABLE`、実センサstreamのrate変更、Config Response。
@@ -755,5 +760,8 @@ codex/webgui-capability-driven
 - 2026-06-21: Config v4 `SET_STREAM_INTERVAL` を `stream_id=1` で実装し、Firmware build / flash / BLE smoke / negative smokeで確認済み。
 - 2026-06-21: `stream_id=1` を `DUMMY_ACCEL3_INT16_V1` へ整理し、dummy batteryとA0 ADCをactive pathから削除。PC自動テスト / Firmware build / flash / BLE smoke / negative smokeで確認済み。
 - 2026-06-23: WebGUIのinterval表示を全streamへ広げ、`DUMMY_ACCEL3` はEditable、実センサstreamはFixedとして表示するよう更新。PC自動テストで確認済み。
+- 2026-06-23: LSM6DSL派生姿勢stream `stream_id=13` のPC backend対応を実装。`ORIENTATION_MOTION_INT16_V1` のparse/pack、Capability field metadata、WebSocket sample JSON、CUI表示、BLE smoke出力を追加し、PC自動テスト31件で確認済み。Firmware/WebGUI統合と実機確認は未実施。
+- 2026-06-23: `codex/stream13-firmware` でLSM6DSL派生姿勢stream `stream_id=13` のFirmware実装を追加し、PC自動テスト30件とFirmware shield buildで確認済み。PC backend未対応のためflash / BLE smoke / WebGUI確認は統合branchで行う。
+- 2026-06-23: `stream_id=13` WebGUI taskとして、fallback Capability、最新値/graph/CSVのorientation field、local Three.jsによる3D cuboid viewを追加。統合後の実backend + 実ブラウザ確認は未実施。
 
 過去履歴内の `次作業` は当時のメモであり、現在の優先順位は `現在の残課題 / 次回作業キュー` を正とする。
