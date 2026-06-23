@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
