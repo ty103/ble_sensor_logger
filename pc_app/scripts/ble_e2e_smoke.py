@@ -60,6 +60,16 @@ async def main() -> None:
             )
         )
 
+    await app.set_orientation_filter_params(0.97, 0.6, 0.02)
+    filter_config = await app.read_config()
+    print(
+        "orientation_filter_config_last=op:{} stream:{} value:{}".format(
+            filter_config.op.name,
+            filter_config.stream_id,
+            filter_config.sample_interval_ms,
+        )
+    )
+
     await app.start_monitoring(on_sample)
     print("monitoring=true")
 
@@ -113,13 +123,17 @@ async def main() -> None:
         print(f"latest_gyro_mdps={latest.gyro_x_mdps},{latest.gyro_y_mdps},{latest.gyro_z_mdps}")
         print(f"latest_mag_ut={latest.mag_x_ut},{latest.mag_y_ut},{latest.mag_z_ut}")
         print(
-            "latest_orientation_cdeg={},{},{},{},{},{} accel_norm_mg={}".format(
+            "latest_orientation_cdeg={},{},{},{},{},{},{},{},{},{} accel_norm_mg={}".format(
                 latest.pitch_naive_cdeg,
                 latest.roll_naive_cdeg,
                 latest.zenith_naive_cdeg,
-                latest.pitch_filtered_cdeg,
-                latest.roll_filtered_cdeg,
-                latest.zenith_filtered_cdeg,
+                latest.pitch_complementary_cdeg,
+                latest.roll_complementary_cdeg,
+                latest.zenith_complementary_cdeg,
+                latest.pitch_mahony_cdeg,
+                latest.roll_mahony_cdeg,
+                latest.zenith_mahony_cdeg,
+                latest.yaw_mahony_cdeg,
                 latest.accel_norm_mg,
             )
         )
@@ -157,14 +171,18 @@ async def main() -> None:
         if orientation_samples:
             latest_orientation = orientation_samples[-1]
             print(
-                "latest_orientation_deg={:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f} "
+                "latest_orientation_deg={:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f} "
                 "accel_norm_mg={}".format(
                     latest_orientation.pitch_naive_cdeg / 100,
                     latest_orientation.roll_naive_cdeg / 100,
                     latest_orientation.zenith_naive_cdeg / 100,
-                    latest_orientation.pitch_filtered_cdeg / 100,
-                    latest_orientation.roll_filtered_cdeg / 100,
-                    latest_orientation.zenith_filtered_cdeg / 100,
+                    latest_orientation.pitch_complementary_cdeg / 100,
+                    latest_orientation.roll_complementary_cdeg / 100,
+                    latest_orientation.zenith_complementary_cdeg / 100,
+                    latest_orientation.pitch_mahony_cdeg / 100,
+                    latest_orientation.roll_mahony_cdeg / 100,
+                    latest_orientation.zenith_mahony_cdeg / 100,
+                    latest_orientation.yaw_mahony_cdeg / 100,
                     latest_orientation.accel_norm_mg,
                 )
             )

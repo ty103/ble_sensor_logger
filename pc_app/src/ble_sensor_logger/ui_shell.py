@@ -130,16 +130,22 @@ class InteractiveShell:
         if sample.payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V1:
             print(
                 "stream={} seq={:5d} timestamp={:8d}ms naive=({:7.2f},{:7.2f},{:7.2f})deg "
-                "filtered=({:7.2f},{:7.2f},{:7.2f})deg accel_norm={:5d}mg missed={}".format(
+                "comp=({:7.2f},{:7.2f},{:7.2f})deg "
+                "mahony=({:7.2f},{:7.2f},{:7.2f},{:7.2f})deg "
+                "accel_norm={:5d}mg missed={}".format(
                     sample.stream_id,
                     sample.sequence,
                     sample.timestamp_ms,
                     sample.pitch_naive_cdeg / 100,
                     sample.roll_naive_cdeg / 100,
                     sample.zenith_naive_cdeg / 100,
-                    sample.pitch_filtered_cdeg / 100,
-                    sample.roll_filtered_cdeg / 100,
-                    sample.zenith_filtered_cdeg / 100,
+                    sample.pitch_complementary_cdeg / 100,
+                    sample.roll_complementary_cdeg / 100,
+                    sample.zenith_complementary_cdeg / 100,
+                    sample.pitch_mahony_cdeg / 100,
+                    sample.roll_mahony_cdeg / 100,
+                    sample.zenith_mahony_cdeg / 100,
+                    sample.yaw_mahony_cdeg / 100,
                     sample.accel_norm_mg,
                     self.app.state.missed_samples,
                 )

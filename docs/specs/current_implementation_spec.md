@@ -95,10 +95,10 @@
 ### 6.2 Sensor Data frame v3
 
 Characteristic: Sensor Data Notification
-サイズ: 16-24 bytes
+サイズ: 16-34 bytes
 Python header struct format: `<BBBBHIBB`
 
-Sensor Dataは12 bytesの共通headerとstream-specific payloadで構成する。現行実装では `stream_id=1` の `DUMMY_ACCEL3` を常時サポートし、X-NUCLEO-IKS01A2上のLSM6DSLがFirmware起動時にreadyになった場合のみ `stream_id=10` の `IMU6`、HTS221がreadyになった場合のみ `stream_id=30` の `TEMP_HUMIDITY`、LPS22HBがreadyになった場合のみ `stream_id=20` の `PRESSURE`、LSM303AGR magnetometerがreadyになった場合のみ `stream_id=12` の `MAG3` をCapabilityへ含め、測定中に通知する。
+Sensor Dataは12 bytesの共通headerとstream-specific payloadで構成する。現行実装では `stream_id=1` の `DUMMY_ACCEL3` を常時サポートし、X-NUCLEO-IKS01A2上のLSM6DSLがFirmware起動時にreadyになった場合のみ `stream_id=10` の `IMU6` と `stream_id=13` の `ORIENTATION_MOTION`、HTS221がreadyになった場合のみ `stream_id=30` の `TEMP_HUMIDITY`、LPS22HBがreadyになった場合のみ `stream_id=20` の `PRESSURE`、LSM303AGR magnetometerがreadyになった場合のみ `stream_id=12` の `MAG3` をCapabilityへ含め、測定中に通知する。
 
 Header:
 
@@ -106,11 +106,11 @@ Header:
 | ---: | ---: | --- | --- | --- |
 | 0 | 1 | uint8 | version | `3` |
 | 1 | 1 | uint8 | message_type | `1` = SENSOR_SAMPLE |
-| 2 | 1 | uint8 | stream_id | `1` = DUMMY_ACCEL3、`10` = LSM6DSL IMU6、`12` = LSM303AGR MAG3、`20` = LPS22HB PRESSURE、`30` = HTS221 TEMP_HUMIDITY |
+| 2 | 1 | uint8 | stream_id | `1` = DUMMY_ACCEL3、`10` = LSM6DSL IMU6、`12` = LSM303AGR MAG3、`13` = LSM6DSL ORIENTATION_MOTION、`20` = LPS22HB PRESSURE、`30` = HTS221 TEMP_HUMIDITY |
 | 3 | 1 | uint8 | flags | 予約。現行では0 |
 | 4 | 2 | uint16 | sequence | stream単位のサンプル連番 |
 | 6 | 4 | uint32 | timestamp_ms | Device boot後ms |
-| 10 | 1 | uint8 | payload_format | `1` = DUMMY_ACCEL3_INT16_V1、`2` = IMU6_INT16_V1、`3` = HTS221_TEMP_HUMIDITY_INT16_V1、`4` = LPS22HB_PRESSURE_INT32_V1、`5` = MAG3_INT16_V1 |
+| 10 | 1 | uint8 | payload_format | `1` = DUMMY_ACCEL3_INT16_V1、`2` = IMU6_INT16_V1、`3` = HTS221_TEMP_HUMIDITY_INT16_V1、`4` = LPS22HB_PRESSURE_INT32_V1、`5` = MAG3_INT16_V1、`6` = ORIENTATION_MOTION_INT16_V1 |
 | 11 | 1 | uint8 | payload_len | payload byte数 |
 
 DUMMY_ACCEL3_INT16_V1 payload:
@@ -152,6 +152,22 @@ MAG3_INT16_V1 payload:
 | 12 | 2 | int16 | mag_x_ut | LSM303AGR magnetometer X、uT単位 |
 | 14 | 2 | int16 | mag_y_ut | LSM303AGR magnetometer Y、uT単位 |
 | 16 | 2 | int16 | mag_z_ut | LSM303AGR magnetometer Z、uT単位 |
+
+ORIENTATION_MOTION_INT16_V1 payload:
+
+| Offset | Size | 型 | 名称 | 説明 |
+| ---: | ---: | --- | --- | --- |
+| 12 | 2 | int16 | pitch_naive_cdeg | accel由来pitch、0.01 degree単位 |
+| 14 | 2 | int16 | roll_naive_cdeg | accel由来roll、0.01 degree単位 |
+| 16 | 2 | int16 | zenith_naive_cdeg | accel由来zenith、0.01 degree単位 |
+| 18 | 2 | int16 | pitch_complementary_cdeg | 相補フィルタpitch、0.01 degree単位 |
+| 20 | 2 | int16 | roll_complementary_cdeg | 相補フィルタroll、0.01 degree単位 |
+| 22 | 2 | int16 | zenith_complementary_cdeg | 相補フィルタzenith、0.01 degree単位 |
+| 24 | 2 | int16 | pitch_mahony_cdeg | Mahony filter pitch、0.01 degree単位 |
+| 26 | 2 | int16 | roll_mahony_cdeg | Mahony filter roll、0.01 degree単位 |
+| 28 | 2 | int16 | zenith_mahony_cdeg | Mahony filter zenith、0.01 degree単位 |
+| 30 | 2 | int16 | yaw_mahony_cdeg | Mahony filter yaw、0.01 degree単位。現行はmagnetometer補正なしのためdriftし得る |
+| 32 | 2 | int16 | accel_norm_mg | 合成加速度、mg単位 |
 
 ### 6.3 Control payload
 
@@ -274,7 +290,7 @@ Header:
 | 5 | 1 | uint8 | reserved | `0` |
 | 6 | 2 | uint16 | supported_commands | command値をbit位置にしたbitmask |
 | 8 | 2 | uint16 | supported_features | bit0 interval config、bit1 status read、bit2 sensor notify |
-| 10 | 2 | uint16 | preferred_mtu | 現行ではSensor Data frame v3 max sizeの26 |
+| 10 | 2 | uint16 | preferred_mtu | 現行ではSensor Data frame v3 max sizeの34 |
 
 Stream descriptor共通形式:
 
@@ -299,6 +315,7 @@ Stream descriptor共通形式:
 | ---: | --- | ---: | --- | --- | --- | --- |
 | 1 | `DUMMY_ACCEL3` | 3 | `INT16` | `MG` | `DUMMY_ACCEL3_INT16_V1` | 100 / 20 / 10000 ms |
 | 10 | `IMU6` | 6 | `INT16` | `MIXED` | `IMU6_INT16_V1` | 38 / 38 / 38 ms |
+| 13 | `ORIENTATION_MOTION` | 11 | `INT16` | `MIXED` | `ORIENTATION_MOTION_INT16_V1` | 38 / 38 / 38 ms |
 | 30 | `TEMP_HUMIDITY` | 2 | `INT16` | `MIXED` | `HTS221_TEMP_HUMIDITY_INT16_V1` | 1000 / 1000 / 1000 ms |
 | 20 | `PRESSURE` | 1 | `INT32` | `PA` | `LPS22HB_PRESSURE_INT32_V1` | 1000 / 1000 / 1000 ms |
 | 12 | `MAG3` | 3 | `INT16` | `UT` | `MAG3_INT16_V1` | 100 / 100 / 100 ms |
@@ -317,6 +334,7 @@ Base URL: `http://127.0.0.1:8765`
 | POST | `/api/stop` | なし | `{ "ok": true }` |
 | POST | `/api/reset-sequence` | なし | `{ "ok": true }` |
 | POST | `/api/interval` | `{ "stream_id": 1, "interval_ms": 100 }` | `{ "ok": true, "stream_id": 1, "interval_ms": 100 }` |
+| POST | `/api/orientation-filter` | `{ "complementary_alpha": 0.98, "mahony_kp": 0.5, "mahony_ki": 0.0 }` | `{ "ok": true, "complementary_alpha": 0.98, "mahony_kp": 0.5, "mahony_ki": 0.0 }` |
 | GET | `/api/status` | なし | 接続状態、monitoring状態、Status、latest sample。Statusには `last_error` と `optional_sensors.{lsm6dsl,hts221,lps22hb,lsm303agr_magn}.error` を含む |
 | GET | `/api/capability` | なし | 接続中DeviceのCapability metadata。WebGUI用にbackendが `payload_format` 由来の `fields` metadataを付与する |
 | GET | `/ws` | WebSocket upgrade | state/sample event |
@@ -411,7 +429,8 @@ uv run --extra dev \
 - Capability metadataに基づく最新値表示
 - Capability metadataに基づくSignal選択とリアルタイムchart表示。最大3個のgraphを描画でき、各graphは最大3つのSignalを選択できる
 - GraphごとにY軸rangeのAuto/manual指定、X軸rangeのAuto/任意秒数window指定
-- `stream_id=13` のorientation field metadataがある場合の3D cuboid表示。WebGUI fallback Capabilityにはorientation fieldを含めるが、実backendからのlive更新はPC backend/Firmware統合後に確認する
+- `stream_id=13` のorientation field metadataがある場合の3D cuboid表示。Naive、相補フィルタ、Mahony filterの3方式を同時表示でき、各方式の表示/非表示を切り替えられる
+- Orientation filter設定。GUIから相補フィルタ `alpha`、Mahony filter `K_p`、`K_i` を `/api/orientation-filter` 経由でFirmwareのConfig characteristicへWriteできる
 - 最大5000点のchart履歴
 - CSV記録開始/停止とdownload
 
@@ -423,7 +442,7 @@ timestamp_ms,payload_format,payload_len,<stream-qualified Capability fields...>,
 missed_samples
 ```
 
-`<stream-qualified Capability fields...>` は `/api/capability` の `streams[].fields[]` をstream順に展開した列で、列名は `s<stream_id>_<field>` とする。現行fallbackでは `s1_accel_x_mg`、`s1_accel_y_mg`、`s1_accel_z_mg`、`s10_accel_x_mg`、`s10_accel_y_mg`、`s10_accel_z_mg`、`s10_gyro_x_mdps`、`s10_gyro_y_mdps`、`s10_gyro_z_mdps`、`s13_pitch_naive_cdeg`、`s13_roll_naive_cdeg`、`s13_zenith_naive_cdeg`、`s13_pitch_filtered_cdeg`、`s13_roll_filtered_cdeg`、`s13_zenith_filtered_cdeg`、`s13_accel_norm_mg`、`s30_humidity_centi_percent`、`s30_temperature_centi_c`、`s20_pressure_pa`、`s12_mag_x_ut`、`s12_mag_y_ut`、`s12_mag_z_ut` を含む。sample行と一致しないstreamの値列は空欄にする。CSVは単一wide CSVとしてdownloadし、stream別CSV分割は現時点では行わない。
+`<stream-qualified Capability fields...>` は `/api/capability` の `streams[].fields[]` をstream順に展開した列で、列名は `s<stream_id>_<field>` とする。現行fallbackでは `s1_accel_x_mg`、`s1_accel_y_mg`、`s1_accel_z_mg`、`s10_accel_x_mg`、`s10_accel_y_mg`、`s10_accel_z_mg`、`s10_gyro_x_mdps`、`s10_gyro_y_mdps`、`s10_gyro_z_mdps`、`s13_pitch_naive_cdeg`、`s13_roll_naive_cdeg`、`s13_zenith_naive_cdeg`、`s13_pitch_complementary_cdeg`、`s13_roll_complementary_cdeg`、`s13_zenith_complementary_cdeg`、`s13_pitch_mahony_cdeg`、`s13_roll_mahony_cdeg`、`s13_zenith_mahony_cdeg`、`s13_yaw_mahony_cdeg`、`s13_accel_norm_mg`、`s30_humidity_centi_percent`、`s30_temperature_centi_c`、`s20_pressure_pa`、`s12_mag_x_ut`、`s12_mag_y_ut`、`s12_mag_z_ut` を含む。sample行と一致しないstreamの値列は空欄にする。CSVは単一wide CSVとしてdownloadし、stream別CSV分割は現時点では行わない。
 
 ## 10. 受け入れ条件
 
@@ -431,7 +450,7 @@ missed_samples
 | --- | --- |
 | AC-01 | PCからDevice nameまたはService UUIDでscanできる |
 | AC-02 | PCからconnect/disconnectできる |
-| AC-03 | Sensor Data Notificationを購読し、Protocol v3 16-24 bytes frameをparseできる |
+| AC-03 | Sensor Data Notificationを購読し、Protocol v3 16-34 bytes frameをparseできる |
 | AC-04 | 旧Protocol v1/v2 payloadを受け付けない |
 | AC-05 | start/stopでDevice stateがMEASURING/IDLEへ遷移する |
 | AC-06 | `stream_id=1` へ20-10000 msのsampling intervalをConfig v4 Writeできる |
@@ -451,7 +470,7 @@ missed_samples
 - StatusはNotifyされないため、WebGUIは操作後にStatus Readする。
 - Config v4の最小実装では `SET_STREAM_INTERVAL` のみ扱い、`SET_STREAM_ENABLE`、range/filter/calibration設定、Config Responseは未実装である。
 - Firmware Capability payload内のfield単位unit/scale metadataは未実装である。現行WebGUI/CSV向けには、PC backend補完のfield metadataを正式仕様として使う。
-- Fragmentationは未実装であり、現行Sensor Data frameの最大は24 bytesである。将来payloadが大きくなる場合はATT MTU拡張を前提とする。
+- Fragmentationは未実装であり、現行Sensor Data frameの最大は34 bytesである。将来payloadが大きくなる場合はATT MTU拡張を前提とする。
 - `connection_count` は接続回数として公開しているが、現行実装ではBLE層とcontrol層の状態同期を今後整理する余地がある。
 - optional sensor診断はStatusのsensor別error fieldで同時に取得できる。ただしI2C addressやpin状態など、より詳細なruntime診断はまだ返さない。
 - LSM303AGR accel `stream_id=11` は予約候補だが、現行runtime streamには含めない。追加判断は `docs/adr/0006-defer-lsm303agr-accel-stream.md` を参照する。

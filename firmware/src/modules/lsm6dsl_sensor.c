@@ -15,7 +15,9 @@
 
 LOG_MODULE_REGISTER(lsm6dsl_sensor, LOG_LEVEL_INF);
 
-#define BSL_ORIENTATION_FILTER_ALPHA 0.98
+#define BSL_ORIENTATION_COMPLEMENTARY_ALPHA_DEFAULT 0.98
+#define BSL_ORIENTATION_MAHONY_KP_DEFAULT 0.5
+#define BSL_ORIENTATION_MAHONY_KI_DEFAULT 0.0
 #define BSL_PI 3.14159265358979323846
 
 static struct k_work_delayable sample_work;
@@ -25,8 +27,13 @@ static bool running;
 static bool ready;
 static bool orientation_filter_initialized;
 static uint32_t orientation_last_timestamp_ms;
-static double filtered_pitch_deg;
-static double filtered_roll_deg;
+static double complementary_alpha = BSL_ORIENTATION_COMPLEMENTARY_ALPHA_DEFAULT;
+static double mahony_kp = BSL_ORIENTATION_MAHONY_KP_DEFAULT;
+static double mahony_ki = BSL_ORIENTATION_MAHONY_KI_DEFAULT;
+static double complementary_pitch_deg;
+static double complementary_roll_deg;
+static double mahony_integral[3];
+static double mahony_q[4] = {1.0, 0.0, 0.0, 0.0};
 
 #if DT_HAS_COMPAT_STATUS_OKAY(st_lsm6dsl)
 static const struct device *const lsm6dsl = DEVICE_DT_GET_ONE(st_lsm6dsl);
@@ -184,6 +191,125 @@ static double zenith_from_pitch_roll(double pitch_deg, double roll_deg)
 	return rad_to_deg(acos(clamp_double(z_component, -1.0, 1.0)));
 }
 
+static void normalize_quaternion(void)
+{
+	double norm = sqrt((mahony_q[0] * mahony_q[0]) + (mahony_q[1] * mahony_q[1]) +
+			   (mahony_q[2] * mahony_q[2]) + (mahony_q[3] * mahony_q[3]));
+
+	if (norm <= 0.0) {
+		mahony_q[0] = 1.0;
+		mahony_q[1] = 0.0;
+		mahony_q[2] = 0.0;
+		mahony_q[3] = 0.0;
+		return;
+	}
+	for (size_t i = 0; i < ARRAY_SIZE(mahony_q); i++) {
+		mahony_q[i] /= norm;
+	}
+}
+
+static void initialize_mahony_quaternion(double pitch_deg, double roll_deg)
+{
+	double pitch = pitch_deg * (BSL_PI / 180.0);
+	double roll = roll_deg * (BSL_PI / 180.0);
+	double cr = cos(roll * 0.5);
+	double sr = sin(roll * 0.5);
+	double cp = cos(pitch * 0.5);
+	double sp = sin(pitch * 0.5);
+
+	mahony_q[0] = cr * cp;
+	mahony_q[1] = sr * cp;
+	mahony_q[2] = cr * sp;
+	mahony_q[3] = -sr * sp;
+	mahony_integral[0] = 0.0;
+	mahony_integral[1] = 0.0;
+	mahony_integral[2] = 0.0;
+	normalize_quaternion();
+}
+
+static void update_mahony(const double accel_mg[3], const double gyro_mdps[3], double dt_s)
+{
+	double accel_norm = sqrt((accel_mg[0] * accel_mg[0]) + (accel_mg[1] * accel_mg[1]) +
+				 (accel_mg[2] * accel_mg[2]));
+	double gx = gyro_mdps[0] * (BSL_PI / 180.0) / 1000.0;
+	double gy = gyro_mdps[1] * (BSL_PI / 180.0) / 1000.0;
+	double gz = gyro_mdps[2] * (BSL_PI / 180.0) / 1000.0;
+	double q0 = mahony_q[0];
+	double q1 = mahony_q[1];
+	double q2 = mahony_q[2];
+	double q3 = mahony_q[3];
+	double q_dot[4];
+
+	if (accel_norm > 0.0) {
+		double ax = accel_mg[0] / accel_norm;
+		double ay = accel_mg[1] / accel_norm;
+		double az = accel_mg[2] / accel_norm;
+		double vx = 2.0 * ((q1 * q3) - (q0 * q2));
+		double vy = 2.0 * ((q0 * q1) + (q2 * q3));
+		double vz = (q0 * q0) - (q1 * q1) - (q2 * q2) + (q3 * q3);
+		double error[3] = {
+			(ay * vz) - (az * vy),
+			(az * vx) - (ax * vz),
+			(ax * vy) - (ay * vx),
+		};
+
+		if (mahony_ki > 0.0) {
+			for (size_t i = 0; i < ARRAY_SIZE(mahony_integral); i++) {
+				mahony_integral[i] += mahony_ki * error[i] * dt_s;
+			}
+		} else {
+			mahony_integral[0] = 0.0;
+			mahony_integral[1] = 0.0;
+			mahony_integral[2] = 0.0;
+		}
+
+		gx += (mahony_kp * error[0]) + mahony_integral[0];
+		gy += (mahony_kp * error[1]) + mahony_integral[1];
+		gz += (mahony_kp * error[2]) + mahony_integral[2];
+	}
+
+	q_dot[0] = -0.5 * ((q1 * gx) + (q2 * gy) + (q3 * gz));
+	q_dot[1] = 0.5 * ((q0 * gx) + (q2 * gz) - (q3 * gy));
+	q_dot[2] = 0.5 * ((q0 * gy) - (q1 * gz) + (q3 * gx));
+	q_dot[3] = 0.5 * ((q0 * gz) + (q1 * gy) - (q2 * gx));
+
+	mahony_q[0] += q_dot[0] * dt_s;
+	mahony_q[1] += q_dot[1] * dt_s;
+	mahony_q[2] += q_dot[2] * dt_s;
+	mahony_q[3] += q_dot[3] * dt_s;
+	normalize_quaternion();
+}
+
+static void mahony_to_euler(double *pitch_deg, double *roll_deg, double *yaw_deg)
+{
+	double q0 = mahony_q[0];
+	double q1 = mahony_q[1];
+	double q2 = mahony_q[2];
+	double q3 = mahony_q[3];
+	double sin_pitch = 2.0 * ((q0 * q2) - (q3 * q1));
+
+	*roll_deg = rad_to_deg(atan2(2.0 * ((q0 * q1) + (q2 * q3)),
+				     1.0 - (2.0 * ((q1 * q1) + (q2 * q2)))));
+	*pitch_deg = rad_to_deg(asin(clamp_double(sin_pitch, -1.0, 1.0)));
+	*yaw_deg = rad_to_deg(atan2(2.0 * ((q0 * q3) + (q1 * q2)),
+				    1.0 - (2.0 * ((q2 * q2) + (q3 * q3)))));
+}
+
+static void reset_orientation_filters(void)
+{
+	orientation_filter_initialized = false;
+	orientation_last_timestamp_ms = 0;
+	complementary_pitch_deg = 0.0;
+	complementary_roll_deg = 0.0;
+	mahony_integral[0] = 0.0;
+	mahony_integral[1] = 0.0;
+	mahony_integral[2] = 0.0;
+	mahony_q[0] = 1.0;
+	mahony_q[1] = 0.0;
+	mahony_q[2] = 0.0;
+	mahony_q[3] = 0.0;
+}
+
 static void fill_header(struct bsl_sensor_data *sample, uint8_t stream_id,
 			uint8_t payload_format, uint8_t payload_len,
 			uint16_t sample_sequence, uint32_t timestamp_ms)
@@ -240,6 +366,10 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 	double dt_s;
 	double gyro_pitch_delta_deg;
 	double gyro_roll_delta_deg;
+	double mahony_pitch_deg;
+	double mahony_roll_deg;
+	double mahony_zenith_deg;
+	double mahony_yaw_deg;
 
 	project_to_device_axes(raw_accel, accel);
 	project_to_device_axes(raw_gyro, gyro);
@@ -253,8 +383,9 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 	zenith_naive_deg = rad_to_deg(atan2(horizontal_norm, accel[2]));
 
 	if (!orientation_filter_initialized) {
-		filtered_pitch_deg = pitch_naive_deg;
-		filtered_roll_deg = roll_naive_deg;
+		complementary_pitch_deg = pitch_naive_deg;
+		complementary_roll_deg = roll_naive_deg;
+		initialize_mahony_quaternion(pitch_naive_deg, roll_naive_deg);
 		orientation_filter_initialized = true;
 	} else {
 		if (timestamp_ms >= orientation_last_timestamp_ms) {
@@ -262,16 +393,20 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 		} else {
 			dt_s = (double)BSL_LSM6DSL_INTERVAL_MS / 1000.0;
 		}
+		dt_s = clamp_double(dt_s, 0.001, 1.0);
 		gyro_pitch_delta_deg = (gyro[1] / 1000.0) * dt_s;
 		gyro_roll_delta_deg = (gyro[0] / 1000.0) * dt_s;
-		filtered_pitch_deg = (BSL_ORIENTATION_FILTER_ALPHA *
-				      (filtered_pitch_deg + gyro_pitch_delta_deg)) +
-				     ((1.0 - BSL_ORIENTATION_FILTER_ALPHA) * pitch_naive_deg);
-		filtered_roll_deg = (BSL_ORIENTATION_FILTER_ALPHA *
-				     (filtered_roll_deg + gyro_roll_delta_deg)) +
-				    ((1.0 - BSL_ORIENTATION_FILTER_ALPHA) * roll_naive_deg);
+		complementary_pitch_deg =
+			(complementary_alpha * (complementary_pitch_deg + gyro_pitch_delta_deg)) +
+			((1.0 - complementary_alpha) * pitch_naive_deg);
+		complementary_roll_deg =
+			(complementary_alpha * (complementary_roll_deg + gyro_roll_delta_deg)) +
+			((1.0 - complementary_alpha) * roll_naive_deg);
+		update_mahony(accel, gyro, dt_s);
 	}
 	orientation_last_timestamp_ms = timestamp_ms;
+	mahony_to_euler(&mahony_pitch_deg, &mahony_roll_deg, &mahony_yaw_deg);
+	mahony_zenith_deg = zenith_from_pitch_roll(mahony_pitch_deg, mahony_roll_deg);
 
 	fill_header(sample, BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
 		    BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1,
@@ -279,10 +414,17 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 	sample->payload.orientation_motion.pitch_naive_cdeg = deg_to_cdeg(pitch_naive_deg);
 	sample->payload.orientation_motion.roll_naive_cdeg = deg_to_cdeg(roll_naive_deg);
 	sample->payload.orientation_motion.zenith_naive_cdeg = deg_to_cdeg(zenith_naive_deg);
-	sample->payload.orientation_motion.pitch_filtered_cdeg = deg_to_cdeg(filtered_pitch_deg);
-	sample->payload.orientation_motion.roll_filtered_cdeg = deg_to_cdeg(filtered_roll_deg);
-	sample->payload.orientation_motion.zenith_filtered_cdeg =
-		deg_to_cdeg(zenith_from_pitch_roll(filtered_pitch_deg, filtered_roll_deg));
+	sample->payload.orientation_motion.pitch_complementary_cdeg =
+		deg_to_cdeg(complementary_pitch_deg);
+	sample->payload.orientation_motion.roll_complementary_cdeg =
+		deg_to_cdeg(complementary_roll_deg);
+	sample->payload.orientation_motion.zenith_complementary_cdeg =
+		deg_to_cdeg(zenith_from_pitch_roll(complementary_pitch_deg,
+						   complementary_roll_deg));
+	sample->payload.orientation_motion.pitch_mahony_cdeg = deg_to_cdeg(mahony_pitch_deg);
+	sample->payload.orientation_motion.roll_mahony_cdeg = deg_to_cdeg(mahony_roll_deg);
+	sample->payload.orientation_motion.zenith_mahony_cdeg = deg_to_cdeg(mahony_zenith_deg);
+	sample->payload.orientation_motion.yaw_mahony_cdeg = deg_to_cdeg(mahony_yaw_deg);
 	sample->payload.orientation_motion.accel_norm_mg = double_to_i16(accel_norm);
 }
 
@@ -428,8 +570,7 @@ void lsm6dsl_sensor_start(void)
 	if (running || !ready) {
 		return;
 	}
-	orientation_filter_initialized = false;
-	orientation_last_timestamp_ms = 0;
+	reset_orientation_filters();
 	running = true;
 	k_work_schedule(&sample_work, K_NO_WAIT);
 }
@@ -443,8 +584,7 @@ void lsm6dsl_sensor_stop(void)
 void lsm6dsl_sensor_reset_sequence(void)
 {
 	sequence = 0;
-	orientation_filter_initialized = false;
-	orientation_last_timestamp_ms = 0;
+	reset_orientation_filters();
 }
 
 bool lsm6dsl_sensor_is_available(void)
@@ -455,4 +595,19 @@ bool lsm6dsl_sensor_is_available(void)
 uint16_t lsm6dsl_sensor_status_error(void)
 {
 	return status_error;
+}
+
+void lsm6dsl_sensor_set_complementary_alpha_permille(uint16_t alpha_permille)
+{
+	complementary_alpha = clamp_double((double)alpha_permille / 1000.0, 0.0, 1.0);
+}
+
+void lsm6dsl_sensor_set_mahony_kp_milli(uint16_t kp_milli)
+{
+	mahony_kp = clamp_double((double)kp_milli / 1000.0, 0.0, 10.0);
+}
+
+void lsm6dsl_sensor_set_mahony_ki_milli(uint16_t ki_milli)
+{
+	mahony_ki = clamp_double((double)ki_milli / 1000.0, 0.0, 10.0);
 }

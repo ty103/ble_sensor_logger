@@ -37,9 +37,13 @@ SAMPLE_VALUE_FIELDS = (
     "pitch_naive_cdeg",
     "roll_naive_cdeg",
     "zenith_naive_cdeg",
-    "pitch_filtered_cdeg",
-    "roll_filtered_cdeg",
-    "zenith_filtered_cdeg",
+    "pitch_complementary_cdeg",
+    "roll_complementary_cdeg",
+    "zenith_complementary_cdeg",
+    "pitch_mahony_cdeg",
+    "roll_mahony_cdeg",
+    "zenith_mahony_cdeg",
+    "yaw_mahony_cdeg",
     "accel_norm_mg",
 )
 FIELDS_BY_PAYLOAD_FORMAT = {
@@ -66,9 +70,13 @@ FIELDS_BY_PAYLOAD_FORMAT = {
         "pitch_naive_cdeg",
         "roll_naive_cdeg",
         "zenith_naive_cdeg",
-        "pitch_filtered_cdeg",
-        "roll_filtered_cdeg",
-        "zenith_filtered_cdeg",
+        "pitch_complementary_cdeg",
+        "roll_complementary_cdeg",
+        "zenith_complementary_cdeg",
+        "pitch_mahony_cdeg",
+        "roll_mahony_cdeg",
+        "zenith_mahony_cdeg",
+        "yaw_mahony_cdeg",
         "accel_norm_mg",
     ),
 }
@@ -211,22 +219,50 @@ FIELD_METADATA_BY_PAYLOAD_FORMAT = {
             "decimals": 2,
         },
         {
-            "field": "pitch_filtered_cdeg",
-            "label": "LSM6DSL Pitch Filtered",
+            "field": "pitch_complementary_cdeg",
+            "label": "LSM6DSL Pitch Complementary",
             "unit": "degree",
             "scale": 0.01,
             "decimals": 2,
         },
         {
-            "field": "roll_filtered_cdeg",
-            "label": "LSM6DSL Roll Filtered",
+            "field": "roll_complementary_cdeg",
+            "label": "LSM6DSL Roll Complementary",
             "unit": "degree",
             "scale": 0.01,
             "decimals": 2,
         },
         {
-            "field": "zenith_filtered_cdeg",
-            "label": "LSM6DSL Zenith Filtered",
+            "field": "zenith_complementary_cdeg",
+            "label": "LSM6DSL Zenith Complementary",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "pitch_mahony_cdeg",
+            "label": "LSM6DSL Pitch Mahony",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "roll_mahony_cdeg",
+            "label": "LSM6DSL Roll Mahony",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "zenith_mahony_cdeg",
+            "label": "LSM6DSL Zenith Mahony",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "yaw_mahony_cdeg",
+            "label": "LSM6DSL Yaw Mahony",
             "unit": "degree",
             "scale": 0.01,
             "decimals": 2,
@@ -321,6 +357,26 @@ class WebBackend:
         await self.sensor_app.set_stream_interval(stream_id, interval_ms)
         await self.broadcast_state()
         return web.json_response({"ok": True, "stream_id": stream_id, "interval_ms": interval_ms})
+
+    async def set_orientation_filter(self, request: web.Request) -> web.Response:
+        body = await request.json()
+        complementary_alpha = float(body["complementary_alpha"])
+        mahony_kp = float(body["mahony_kp"])
+        mahony_ki = float(body["mahony_ki"])
+        await self.sensor_app.set_orientation_filter_params(
+            complementary_alpha,
+            mahony_kp,
+            mahony_ki,
+        )
+        await self.broadcast_state()
+        return web.json_response(
+            {
+                "ok": True,
+                "complementary_alpha": complementary_alpha,
+                "mahony_kp": mahony_kp,
+                "mahony_ki": mahony_ki,
+            }
+        )
 
     async def status(self, _request: web.Request) -> web.Response:
         status = None
@@ -486,6 +542,7 @@ def create_web_app(sensor_app: SensorLoggerApp | None = None) -> web.Application
     app.router.add_post("/api/stop", backend.stop)
     app.router.add_post("/api/reset-sequence", backend.reset_sequence)
     app.router.add_post("/api/interval", backend.set_interval)
+    app.router.add_post("/api/orientation-filter", backend.set_orientation_filter)
     app.router.add_get("/api/status", backend.status)
     app.router.add_get("/api/capability", backend.capability)
     app.router.add_get("/ws", backend.websocket)

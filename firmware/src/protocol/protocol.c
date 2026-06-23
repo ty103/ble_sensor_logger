@@ -192,17 +192,28 @@ bool bsl_config_is_valid(const struct bsl_config *payload)
 	    payload->flags != 0) {
 		return false;
 	}
-	if (payload->op != BSL_CONFIG_OP_SET_STREAM_INTERVAL) {
+	if (payload->op == BSL_CONFIG_OP_SET_STREAM_INTERVAL) {
+		if (payload->stream_id != BSL_STREAM_ID_DUMMY_ACCEL3) {
+			return false;
+		}
+		if (payload->sample_interval_ms < BSL_INTERVAL_MIN_MS ||
+		    payload->sample_interval_ms > BSL_INTERVAL_MAX_MS) {
+			return false;
+		}
+		return true;
+	}
+	if (payload->stream_id != BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION) {
 		return false;
 	}
-	if (payload->stream_id != BSL_STREAM_ID_DUMMY_ACCEL3) {
+	switch (payload->op) {
+	case BSL_CONFIG_OP_SET_COMPLEMENTARY_ALPHA:
+		return payload->sample_interval_ms <= 1000U;
+	case BSL_CONFIG_OP_SET_MAHONY_KP:
+	case BSL_CONFIG_OP_SET_MAHONY_KI:
+		return payload->sample_interval_ms <= 10000U;
+	default:
 		return false;
 	}
-	if (payload->sample_interval_ms < BSL_INTERVAL_MIN_MS ||
-	    payload->sample_interval_ms > BSL_INTERVAL_MAX_MS) {
-		return false;
-	}
-	return true;
 }
 
 void bsl_config_default(struct bsl_config *payload)
@@ -266,7 +277,7 @@ void bsl_capability_default(struct bsl_capability *payload)
 
 	payload->streams[2].stream_id = BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION;
 	payload->streams[2].stream_type = BSL_STREAM_TYPE_ORIENTATION_MOTION;
-	payload->streams[2].channel_count = 7;
+	payload->streams[2].channel_count = 11;
 	payload->streams[2].data_type = BSL_STREAM_DATA_TYPE_INT16;
 	payload->streams[2].unit = BSL_STREAM_UNIT_MIXED;
 	payload->streams[2].payload_format = BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1;

@@ -124,7 +124,7 @@ Sequence欠落検出:
 | `read_config()` | Config CharacteristicをRead |
 | `read_capability()` | Capability CharacteristicをRead |
 
-AppCoreは `set_stream_interval(stream_id, interval_ms)` でConfig v4 payloadをpackし、`op=SET_STREAM_INTERVAL` と対象streamを明示してWriteする。既存の `set_interval(interval_ms)` は `stream_id=1` 向けの互換的な便利メソッドとして残す。
+AppCoreは `set_stream_interval(stream_id, interval_ms)` でConfig v4 payloadをpackし、`op=SET_STREAM_INTERVAL` と対象streamを明示してWriteする。既存の `set_interval(interval_ms)` は `stream_id=1` 向けの互換的な便利メソッドとして残す。Orientation filter設定は `set_orientation_filter_params(complementary_alpha, mahony_kp, mahony_ki)` で、Config v4の `SET_COMPLEMENTARY_ALPHA`、`SET_MAHONY_KP`、`SET_MAHONY_KI` を順にWriteする。
 
 エラー方針:
 
@@ -227,6 +227,7 @@ UI操作:
 | Stop | `POST /api/stop` |
 | Reset sequence | `POST /api/reset-sequence` |
 | Apply stream interval | `POST /api/interval` |
+| Apply orientation filters | `POST /api/orientation-filter` |
 | Refresh status | `GET /api/status` |
 | Read capability | `GET /api/capability` |
 
@@ -246,7 +247,8 @@ Chart:
 Orientation view:
 
 - `stream_id=13` / `ORIENTATION_MOTION` のfield metadataがある場合、WebGUIはThree.jsで3D cuboidを表示する。
-- 3D cuboidは `pitch_filtered_cdeg` / `roll_filtered_cdeg` を優先し、filtered fieldが未到着の場合だけ `pitch_naive_cdeg` / `roll_naive_cdeg` をfallbackにする。
+- 3D cuboidはNaive、相補フィルタ、Mahony filterの3方式を同時に表示できる。各方式はtoggleで表示/非表示を切り替えられる。
+- Readoutは各方式のPitch/Roll/Zenith/Accel normを表示し、MahonyはYawも表示する。
 - 3D描画はruntimeで外部CDNへ依存せず、`pc_app/web_frontend/vendor/three.module.min.js` をlocal static assetとして配信する。
 - 最新姿勢readoutは `pitch`、`roll`、`zenith`、`accel_norm_mg` を表示する。`zenith` は姿勢の補助表示であり、cuboid rotationはpitch/rollで行う。
 

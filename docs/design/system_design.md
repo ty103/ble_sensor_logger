@@ -104,7 +104,7 @@ BLE interfaceの詳細なpayload仕様は `../specs/current_implementation_spec.
 
 | Interface | 方向 | Transport操作 | Payload |
 | --- | --- | --- | --- |
-| Sensor Data | Device -> PC | GATT Notify | `SensorDataPayload v3`, 16-24 bytes |
+| Sensor Data | Device -> PC | GATT Notify | `SensorDataPayload v3`, 16-34 bytes |
 | Control | PC -> Device | GATT Write / Write Without Response | `ControlPayload`, 4 bytes |
 | Config | PC <-> Device | GATT Read / Write | `ConfigPayload v4`, 8 bytes |
 | Status | Device -> PC | GATT Read | `StatusPayload`, 16 bytes |

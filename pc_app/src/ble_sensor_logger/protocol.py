@@ -29,7 +29,7 @@ HTS221_INTERVAL_MS = 1000
 SENSOR_DATA_HEADER_FORMAT = "<BBBBHIBB"
 SENSOR_DUMMY_ACCEL3_SAMPLE_FORMAT = "<hhh"
 SENSOR_IMU6_SAMPLE_FORMAT = "<hhhhhh"
-SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT = "<hhhhhhh"
+SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT = "<hhhhhhhhhhh"
 SENSOR_MAG3_SAMPLE_FORMAT = "<hhh"
 SENSOR_HTS221_SAMPLE_FORMAT = "<hh"
 SENSOR_LPS22HB_SAMPLE_FORMAT = "<i"
@@ -68,6 +68,9 @@ class Command(IntEnum):
 
 class ConfigOp(IntEnum):
     SET_STREAM_INTERVAL = 0x01
+    SET_COMPLEMENTARY_ALPHA = 0x02
+    SET_MAHONY_KP = 0x03
+    SET_MAHONY_KI = 0x04
 
 
 class DeviceState(IntEnum):
@@ -170,9 +173,13 @@ class SensorDataPayload:
     pitch_naive_cdeg: int = 0
     roll_naive_cdeg: int = 0
     zenith_naive_cdeg: int = 0
-    pitch_filtered_cdeg: int = 0
-    roll_filtered_cdeg: int = 0
-    zenith_filtered_cdeg: int = 0
+    pitch_complementary_cdeg: int = 0
+    roll_complementary_cdeg: int = 0
+    zenith_complementary_cdeg: int = 0
+    pitch_mahony_cdeg: int = 0
+    roll_mahony_cdeg: int = 0
+    zenith_mahony_cdeg: int = 0
+    yaw_mahony_cdeg: int = 0
     accel_norm_mg: int = 0
 
     @classmethod
@@ -309,9 +316,13 @@ class SensorDataPayload:
                 pitch_naive_cdeg,
                 roll_naive_cdeg,
                 zenith_naive_cdeg,
-                pitch_filtered_cdeg,
-                roll_filtered_cdeg,
-                zenith_filtered_cdeg,
+                pitch_complementary_cdeg,
+                roll_complementary_cdeg,
+                zenith_complementary_cdeg,
+                pitch_mahony_cdeg,
+                roll_mahony_cdeg,
+                zenith_mahony_cdeg,
+                yaw_mahony_cdeg,
                 accel_norm_mg,
             ) = struct.unpack(SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT, payload_raw)
             payload = cls(
@@ -329,9 +340,13 @@ class SensorDataPayload:
                 pitch_naive_cdeg=pitch_naive_cdeg,
                 roll_naive_cdeg=roll_naive_cdeg,
                 zenith_naive_cdeg=zenith_naive_cdeg,
-                pitch_filtered_cdeg=pitch_filtered_cdeg,
-                roll_filtered_cdeg=roll_filtered_cdeg,
-                zenith_filtered_cdeg=zenith_filtered_cdeg,
+                pitch_complementary_cdeg=pitch_complementary_cdeg,
+                roll_complementary_cdeg=roll_complementary_cdeg,
+                zenith_complementary_cdeg=zenith_complementary_cdeg,
+                pitch_mahony_cdeg=pitch_mahony_cdeg,
+                roll_mahony_cdeg=roll_mahony_cdeg,
+                zenith_mahony_cdeg=zenith_mahony_cdeg,
+                yaw_mahony_cdeg=yaw_mahony_cdeg,
                 accel_norm_mg=accel_norm_mg,
             )
         elif payload_format == PayloadFormat.LPS22HB_PRESSURE_INT32_V1:
@@ -408,9 +423,13 @@ class SensorDataPayload:
                 self.pitch_naive_cdeg,
                 self.roll_naive_cdeg,
                 self.zenith_naive_cdeg,
-                self.pitch_filtered_cdeg,
-                self.roll_filtered_cdeg,
-                self.zenith_filtered_cdeg,
+                self.pitch_complementary_cdeg,
+                self.roll_complementary_cdeg,
+                self.zenith_complementary_cdeg,
+                self.pitch_mahony_cdeg,
+                self.roll_mahony_cdeg,
+                self.zenith_mahony_cdeg,
+                self.yaw_mahony_cdeg,
                 self.accel_norm_mg,
             )
         return header + struct.pack(SENSOR_LPS22HB_SAMPLE_FORMAT, self.pressure_pa)
@@ -590,26 +609,33 @@ class ConfigPayload:
     def validate(self) -> None:
         if self.version != CONFIG_VERSION:
             raise ProtocolError(f"unsupported protocol version: {self.version}")
-        if self.op != ConfigOp.SET_STREAM_INTERVAL:
-            raise ProtocolError(f"unsupported config op: {self.op}")
-        if self.stream_id not in {
-            STREAM_ID_DUMMY_ACCEL3,
-            STREAM_ID_LSM6DSL_IMU6,
-            STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
-            STREAM_ID_LSM303AGR_MAG3,
-            STREAM_ID_LPS22HB_PRESSURE,
-            STREAM_ID_HTS221_TEMP_HUMIDITY,
-        }:
-            raise ProtocolError(f"unsupported stream id: {self.stream_id}")
         if self.flags != 0:
             raise ProtocolError("flags must be 0")
-        if self.sample_interval_ms < MIN_INTERVAL_MS or self.sample_interval_ms > MAX_INTERVAL_MS:
-            raise ProtocolError(
-                f"sample_interval_ms must be {MIN_INTERVAL_MS}-{MAX_INTERVAL_MS}, "
-                f"got {self.sample_interval_ms}"
-            )
         if self.reserved != 0:
             raise ProtocolError("reserved must be 0")
+        if self.op == ConfigOp.SET_STREAM_INTERVAL:
+            if self.stream_id != STREAM_ID_DUMMY_ACCEL3:
+                raise ProtocolError(f"unsupported stream id for interval config: {self.stream_id}")
+            if (
+                self.sample_interval_ms < MIN_INTERVAL_MS
+                or self.sample_interval_ms > MAX_INTERVAL_MS
+            ):
+                raise ProtocolError(
+                    f"sample_interval_ms must be {MIN_INTERVAL_MS}-{MAX_INTERVAL_MS}, "
+                    f"got {self.sample_interval_ms}"
+                )
+            return
+        if self.stream_id != STREAM_ID_LSM6DSL_ORIENTATION_MOTION:
+            raise ProtocolError(f"unsupported stream id for filter config: {self.stream_id}")
+        if self.op == ConfigOp.SET_COMPLEMENTARY_ALPHA:
+            if self.sample_interval_ms > 1000:
+                raise ProtocolError("complementary alpha must be 0.000-1.000")
+            return
+        if self.op in (ConfigOp.SET_MAHONY_KP, ConfigOp.SET_MAHONY_KI):
+            if self.sample_interval_ms > 10_000:
+                raise ProtocolError("Mahony gain must be 0.000-10.000")
+            return
+        raise ProtocolError(f"unsupported config op: {self.op}")
 
 
 @dataclass(frozen=True)
@@ -806,7 +832,7 @@ class CapabilityPayload:
                 CapabilityStream(
                     stream_id=STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
                     stream_type=StreamType.ORIENTATION_MOTION,
-                    channel_count=7,
+                    channel_count=11,
                     data_type=StreamDataType.INT16,
                     unit=StreamUnit.MIXED,
                     payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
