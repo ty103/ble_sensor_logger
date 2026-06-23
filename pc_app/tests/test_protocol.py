@@ -33,11 +33,11 @@ def test_payload_sizes_match_spec():
     assert SENSOR_DATA_HEADER_SIZE == 12
     assert SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE == 6
     assert SENSOR_IMU6_SAMPLE_SIZE == 12
-    assert SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE == 14
+    assert SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE == 22
     assert SENSOR_MAG3_SAMPLE_SIZE == 6
     assert SENSOR_HTS221_SAMPLE_SIZE == 4
     assert SENSOR_LPS22HB_SAMPLE_SIZE == 4
-    assert SENSOR_DATA_SIZE == 26
+    assert SENSOR_DATA_SIZE == 34
     assert CONTROL_SIZE == 4
     assert CONFIG_SIZE == 8
     assert STATUS_SIZE == 16
@@ -167,9 +167,13 @@ def test_orientation_motion_sensor_data_round_trip():
         pitch_naive_cdeg=-1234,
         roll_naive_cdeg=567,
         zenith_naive_cdeg=9012,
-        pitch_filtered_cdeg=-1200,
-        roll_filtered_cdeg=600,
-        zenith_filtered_cdeg=9000,
+        pitch_complementary_cdeg=-1200,
+        roll_complementary_cdeg=600,
+        zenith_complementary_cdeg=9000,
+        pitch_mahony_cdeg=-1190,
+        roll_mahony_cdeg=610,
+        zenith_mahony_cdeg=8990,
+        yaw_mahony_cdeg=42,
         accel_norm_mg=1001,
     )
     packed = payload.pack()
@@ -209,6 +213,37 @@ def test_config_v4_stream_interval_round_trip():
 
     assert payload.pack() == b"\x04\x01\x01\x00\xfa\x00\x00\x00"
     assert ConfigPayload.unpack(payload.pack()) == payload
+
+
+def test_config_v4_orientation_filter_params_round_trip():
+    alpha = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_COMPLEMENTARY_ALPHA,
+        stream_id=13,
+        flags=0,
+        sample_interval_ms=980,
+        reserved=0,
+    )
+    kp = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_MAHONY_KP,
+        stream_id=13,
+        flags=0,
+        sample_interval_ms=500,
+        reserved=0,
+    )
+    ki = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_MAHONY_KI,
+        stream_id=13,
+        flags=0,
+        sample_interval_ms=10,
+        reserved=0,
+    )
+
+    assert ConfigPayload.unpack(alpha.pack()) == alpha
+    assert ConfigPayload.unpack(kp.pack()) == kp
+    assert ConfigPayload.unpack(ki.pack()) == ki
 
 
 def test_status_round_trip():
@@ -298,7 +333,7 @@ def test_capability_round_trip():
     assert parsed.streams[2].stream_id == 13
     assert parsed.streams[2].stream_type.name == "ORIENTATION_MOTION"
     assert parsed.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
-    assert parsed.streams[2].channel_count == 7
+    assert parsed.streams[2].channel_count == 11
     assert parsed.streams[3].stream_id == 30
     assert parsed.streams[3].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
     assert parsed.streams[4].stream_id == 20

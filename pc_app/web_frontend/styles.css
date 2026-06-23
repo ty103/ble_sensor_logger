@@ -48,7 +48,7 @@ select, input {
 }
 
 main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 40px; }
-.connection-band, .control-band, .status-band {
+.connection-band, .control-band, .filter-band, .status-band {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -60,6 +60,7 @@ main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 4
 .control-band { justify-content: space-between; }
 .interval-control select { width: 170px; }
 .interval-control input { width: 110px; }
+.filter-band input { width: 92px; }
 
 .metrics-grid {
   display: grid;
@@ -100,9 +101,26 @@ main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 4
   font-size: 14px;
   text-align: right;
 }
+.orientation-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 10px 16px;
+  border: 1px solid #ced7dc;
+  border-top: 0;
+  background: #fbfcfd;
+}
+.orientation-toggles label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #26333d;
+  font-size: 13px;
+  font-weight: 650;
+}
 .orientation-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
   gap: 14px;
   padding: 14px;
   border: 1px solid #ced7dc;
@@ -120,12 +138,25 @@ main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 4
   grid-template-columns: 1fr;
   gap: 10px;
 }
-.orientation-readout div {
+.orientation-readout article {
   min-width: 0;
   padding: 12px;
   border: 1px solid #d4dde3;
   border-radius: 6px;
   background: #fbfcfd;
+}
+.orientation-readout article[hidden] { display: none; }
+.orientation-readout h3 {
+  margin: 0 0 10px;
+  color: #202b33;
+  font-size: 14px;
+}
+.orientation-readout article > div {
+  display: grid;
+  grid-template-columns: minmax(82px, 1fr) minmax(84px, auto);
+  align-items: baseline;
+  gap: 8px;
+  min-height: 28px;
 }
 .orientation-readout div > span {
   display: block;
@@ -134,10 +165,10 @@ main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 4
 }
 .orientation-readout strong {
   display: block;
-  margin-top: 7px;
   color: #182028;
-  font-size: 22px;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .orientation-readout small { margin-left: 5px; color: #65737d; font-size: 12px; }
 
@@ -302,19 +333,19 @@ main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 4
 @media (max-width: 900px) {
   .metrics-grid { grid-template-columns: repeat(3, 1fr); }
   .orientation-layout { grid-template-columns: 1fr; }
-  .orientation-readout { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .orientation-readout { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .graphs-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
   .app-header, .chart-toolbar, .orientation-toolbar { align-items: flex-start; flex-direction: column; }
   .metrics-grid { grid-template-columns: repeat(2, 1fr); }
-  .connection-band > *, .control-band > *, .command-group { width: 100%; }
+  .connection-band > *, .control-band > *, .filter-band > *, .command-group { width: 100%; }
   .command-group button { flex: 1; }
   .status-band button { margin-left: 0; width: 100%; }
   .chart-controls { width: 100%; }
   .chart-controls button { flex: 1; }
   .orientation-toolbar strong { text-align: left; }
-  .orientation-readout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .orientation-readout { grid-template-columns: 1fr; }
   #orientationCanvas { height: 280px; }
   .graph-panel { grid-template-rows: auto auto minmax(240px, 1fr); }
   .graph-panel canvas { height: 260px; }

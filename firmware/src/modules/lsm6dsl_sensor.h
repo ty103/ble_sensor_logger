@@ -10,5 +10,8 @@ uint16_t lsm6dsl_sensor_status_error(void);
 void lsm6dsl_sensor_start(void);
 void lsm6dsl_sensor_stop(void);
 void lsm6dsl_sensor_reset_sequence(void);
+void lsm6dsl_sensor_set_complementary_alpha_permille(uint16_t alpha_permille);
+void lsm6dsl_sensor_set_mahony_kp_milli(uint16_t kp_milli);
+void lsm6dsl_sensor_set_mahony_ki_milli(uint16_t ki_milli);
 
 #endif

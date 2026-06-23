@@ -1007,3 +1007,51 @@ CONFIG_I2C_LOG_LEVEL_DBG=y
 残り条件:
 
 - ユーザー実機確認が完了してから、統合branchを `master` / `main` へmergeする。
+
+### 2026-06-23: Mahony orientation stream / filter設定 end-to-end確認
+
+対象branch: `codex/mahony-orientation-stream`
+
+目的:
+
+- FirmwareでMahony filterによるPitch/Roll/Zenith/Yawを計算し、既存のNaive/相補フィルタ姿勢と同じ `stream_id=13` でBLEへ送る。
+- WebGUIでNaive、相補フィルタ、Mahony filterの3方式を同時表示し、方式ごとの表示/非表示を切り替えられることを確認する。
+- GUIから相補フィルタ `alpha`、Mahony `K_p` / `K_i` をFirmwareへConfig characteristic経由で設定できることを確認する。
+
+確認内容:
+
+- `cd pc_app && uv run --extra dev pytest`
+  - `35 passed`
+- `node --check pc_app/web_frontend/app.js`
+  - 成功
+- `source firmware/.env.template && west build -b nrf52840dk/nrf52840 firmware --build-dir build --pristine --shield x_nucleo_iks01a2`
+  - 成功
+  - `firmware/.env` はこのworktreeに無かったため、tracked templateを検証コマンド内でsourceした。
+- `source firmware/.env.template && nrfutil device list`
+  - `1050278440`
+  - `PCA10056`
+  - `vcom: 0` / `vcom: 1`
+- `source firmware/.env.template && west flash --build-dir build --dev-id 1050278440`
+  - 成功
+- `cd pc_app && uv run --extra dev python scripts/ble_e2e_smoke.py --first-window-s 3 --second-window-s 3`
+  - `streams=6`
+  - `preferred_mtu=34`
+  - `stream_id=13` は `ORIENTATION_MOTION`、`channels=11`、`format=ORIENTATION_MOTION_INT16_V1`
+  - `orientation_filter_config_last=op:SET_MAHONY_KI stream:13 value:20`
+  - first window: `stream_id=13` が72 samples
+  - second window: `stream_id=13` が70 samples
+  - `latest_orientation_deg=2.79,-8.47,8.92,3.67,-10.83,11.43,3.77,-11.15,11.77,-1.50 accel_norm_mg=1026`
+  - `last_error=NONE`、optional sensorsは `lsm6dsl:NONE,hts221:NONE,lps22hb:NONE,lsm303agr_magn:NONE`
+- 実backend + 実ブラウザ:
+  - `uv run --extra dev python -m ble_sensor_logger --web --host 127.0.0.1 --port 8765` を起動。
+  - Browserでscanし、`BLE_SENSOR_LOGGER` を検出。
+  - Connect後、`Connected`、`LSM6DSL=NONE`、`Apply filters` enabledを確認。
+  - GUIから `complementary_alpha=0.965`、`mahony_kp=0.7`、`mahony_ki=0.015` をApplyし、Start後も入力値が保持されることを確認。
+  - Start後、`deviceState=MEASURING`、`orientationMode=3 visible`、`Orientation sample #...`、sample増加を確認。
+  - ReadoutでNaive/Complementary/MahonyそれぞれのPitch/Roll/Zenith/Accel normと、Mahony Yawが更新されることを確認。
+  - Mahony toggleをOFFにすると `mahonyHidden=true`、`orientationMode=2 visible`、ONに戻すと `mahonyHidden=false`、`orientationMode=3 visible` を確認。
+  - 3D canvasをfull-page clipで切り出し、3つのcuboidが描画されることを確認。pixel確認は `733x320`、`unique_rgb=8356`、`non_background_pixels=15730`。
+
+注意:
+
+- Mahony yawは現行実装ではmagnetometer補正なしのためdriftし得る。今後9-axis fusionへ進める場合はLSM303AGR magnetometerとの統合を別taskで設計する。

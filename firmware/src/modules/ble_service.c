@@ -329,6 +329,8 @@ void ble_service_set_config(const struct bsl_config *config)
 {
 	if (config) {
 		current_config = *config;
-		current_status.sample_interval_ms = config->sample_interval_ms;
+		if (config->op == BSL_CONFIG_OP_SET_STREAM_INTERVAL) {
+			current_status.sample_interval_ms = config->sample_interval_ms;
+		}
 	}
 }

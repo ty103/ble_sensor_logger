@@ -14,6 +14,7 @@ from .protocol import (
     ControlPayload,
     CONFIG_VERSION,
     STREAM_ID_DUMMY_ACCEL3,
+    STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
     SensorDataPayload,
     StatusPayload,
 )
@@ -98,6 +99,30 @@ class SensorLoggerApp:
             stream_id=stream_id,
             flags=0,
             sample_interval_ms=interval_ms,
+            reserved=0,
+        )
+        await self.client.write_config(payload.pack())
+
+    async def set_orientation_filter_params(
+        self,
+        complementary_alpha: float,
+        mahony_kp: float,
+        mahony_ki: float,
+    ) -> None:
+        await self._write_orientation_filter_config(
+            ConfigOp.SET_COMPLEMENTARY_ALPHA,
+            round(complementary_alpha * 1000),
+        )
+        await self._write_orientation_filter_config(ConfigOp.SET_MAHONY_KP, round(mahony_kp * 1000))
+        await self._write_orientation_filter_config(ConfigOp.SET_MAHONY_KI, round(mahony_ki * 1000))
+
+    async def _write_orientation_filter_config(self, op: ConfigOp, value_milli: int) -> None:
+        payload = ConfigPayload(
+            version=CONFIG_VERSION,
+            op=op,
+            stream_id=STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
+            flags=0,
+            sample_interval_ms=value_milli,
             reserved=0,
         )
         await self.client.write_config(payload.pack())

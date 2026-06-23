@@ -43,6 +43,16 @@
       </div>
     </section>
 
+    <section class="filter-band" aria-label="Orientation filter settings">
+      <label for="complementaryAlphaInput">Complementary alpha</label>
+      <input id="complementaryAlphaInput" type="number" min="0" max="1" step="0.001" value="0.98">
+      <label for="mahonyKpInput">Mahony Kp</label>
+      <input id="mahonyKpInput" type="number" min="0" max="10" step="0.01" value="0.5">
+      <label for="mahonyKiInput">Mahony Ki</label>
+      <input id="mahonyKiInput" type="number" min="0" max="10" step="0.001" value="0">
+      <button id="applyFilterButton" class="secondary" disabled>Apply filters</button>
+    </section>
+
     <section id="metricsGrid" class="metrics-grid" aria-label="Latest sensor values"></section>
 
     <section class="orientation-section" aria-label="Orientation view">
@@ -53,13 +63,36 @@
         </div>
         <strong id="orientationMode">Waiting</strong>
       </div>
+      <div class="orientation-toggles" aria-label="Orientation display modes">
+        <label><input id="orientationToggleNaive" type="checkbox" checked> Naive</label>
+        <label><input id="orientationToggleComplementary" type="checkbox" checked> Complementary</label>
+        <label><input id="orientationToggleMahony" type="checkbox" checked> Mahony</label>
+      </div>
       <div class="orientation-layout">
         <canvas id="orientationCanvas" aria-label="3D orientation cuboid"></canvas>
         <div class="orientation-readout">
-          <div><span>Pitch</span><strong><span id="orientationPitch">--</span><small>deg</small></strong></div>
-          <div><span>Roll</span><strong><span id="orientationRoll">--</span><small>deg</small></strong></div>
-          <div><span>Zenith</span><strong><span id="orientationZenith">--</span><small>deg</small></strong></div>
-          <div><span>Accel norm</span><strong><span id="orientationAccel">--</span><small>mg</small></strong></div>
+          <article data-orientation-card="naive">
+            <h3>Naive</h3>
+            <div><span>Pitch</span><strong><span id="orientationNaivePitch">--</span><small>deg</small></strong></div>
+            <div><span>Roll</span><strong><span id="orientationNaiveRoll">--</span><small>deg</small></strong></div>
+            <div><span>Zenith</span><strong><span id="orientationNaiveZenith">--</span><small>deg</small></strong></div>
+            <div><span>Accel norm</span><strong><span id="orientationNaiveAccel">--</span><small>mg</small></strong></div>
+          </article>
+          <article data-orientation-card="complementary">
+            <h3>Complementary</h3>
+            <div><span>Pitch</span><strong><span id="orientationComplementaryPitch">--</span><small>deg</small></strong></div>
+            <div><span>Roll</span><strong><span id="orientationComplementaryRoll">--</span><small>deg</small></strong></div>
+            <div><span>Zenith</span><strong><span id="orientationComplementaryZenith">--</span><small>deg</small></strong></div>
+            <div><span>Accel norm</span><strong><span id="orientationComplementaryAccel">--</span><small>mg</small></strong></div>
+          </article>
+          <article data-orientation-card="mahony">
+            <h3>Mahony</h3>
+            <div><span>Pitch</span><strong><span id="orientationMahonyPitch">--</span><small>deg</small></strong></div>
+            <div><span>Roll</span><strong><span id="orientationMahonyRoll">--</span><small>deg</small></strong></div>
+            <div><span>Zenith</span><strong><span id="orientationMahonyZenith">--</span><small>deg</small></strong></div>
+            <div><span>Accel norm</span><strong><span id="orientationMahonyAccel">--</span><small>mg</small></strong></div>
+            <div><span>Yaw</span><strong><span id="orientationMahonyYaw">--</span><small>deg</small></strong></div>
+          </article>
         </div>
       </div>
     </section>

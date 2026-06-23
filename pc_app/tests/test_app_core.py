@@ -9,6 +9,7 @@ from ble_sensor_logger.protocol import (
     SENSOR_MAG3_SAMPLE_SIZE,
     SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
     CapabilityPayload,
+    ConfigOp,
     ConfigPayload,
     MessageType,
     PayloadFormat,
@@ -148,9 +149,13 @@ def test_sequence_gap_tracking_is_per_stream():
             pitch_naive_cdeg=-1234,
             roll_naive_cdeg=567,
             zenith_naive_cdeg=9012,
-            pitch_filtered_cdeg=-1200,
-            roll_filtered_cdeg=600,
-            zenith_filtered_cdeg=9000,
+            pitch_complementary_cdeg=-1200,
+            roll_complementary_cdeg=600,
+            zenith_complementary_cdeg=9000,
+            pitch_mahony_cdeg=-1190,
+            roll_mahony_cdeg=610,
+            zenith_mahony_cdeg=8990,
+            yaw_mahony_cdeg=42,
             accel_norm_mg=1001,
         ),
         SensorDataPayload(
@@ -242,9 +247,13 @@ def test_sequence_gap_tracking_is_per_stream():
             pitch_naive_cdeg=-1233,
             roll_naive_cdeg=568,
             zenith_naive_cdeg=9011,
-            pitch_filtered_cdeg=-1199,
-            roll_filtered_cdeg=601,
-            zenith_filtered_cdeg=8999,
+            pitch_complementary_cdeg=-1199,
+            roll_complementary_cdeg=601,
+            zenith_complementary_cdeg=8999,
+            pitch_mahony_cdeg=-1189,
+            roll_mahony_cdeg=611,
+            zenith_mahony_cdeg=8989,
+            yaw_mahony_cdeg=43,
             accel_norm_mg=1002,
         ),
     )
@@ -302,5 +311,25 @@ def test_set_stream_interval_writes_config_v4_payload():
         assert payload.version == 4
         assert payload.stream_id == 1
         assert payload.sample_interval_ms == 250
+
+    asyncio.run(run())
+
+
+def test_set_orientation_filter_params_writes_config_v4_payloads():
+    async def run():
+        client = FakeClient()
+        app = SensorLoggerApp(client=client)
+
+        await app.set_orientation_filter_params(0.975, 0.5, 0.01)
+
+        assert len(client.config_writes) == 3
+        payloads = [ConfigPayload.unpack(payload) for payload in client.config_writes]
+        assert [payload.op for payload in payloads] == [
+            ConfigOp.SET_COMPLEMENTARY_ALPHA,
+            ConfigOp.SET_MAHONY_KP,
+            ConfigOp.SET_MAHONY_KI,
+        ]
+        assert [payload.stream_id for payload in payloads] == [13, 13, 13]
+        assert [payload.sample_interval_ms for payload in payloads] == [975, 500, 10]
 
     asyncio.run(run())

@@ -109,9 +109,27 @@ static bool app_event_handler(const struct app_event_header *aeh)
 	if (is_config_update_event(aeh)) {
 		const struct config_update_event *event = cast_config_update_event(aeh);
 
-		status.sample_interval_ms = event->config.sample_interval_ms;
+		switch (event->config.op) {
+		case BSL_CONFIG_OP_SET_STREAM_INTERVAL:
+			status.sample_interval_ms = event->config.sample_interval_ms;
+			sensor_dummy_set_interval(event->config.sample_interval_ms);
+			break;
+		case BSL_CONFIG_OP_SET_COMPLEMENTARY_ALPHA:
+			lsm6dsl_sensor_set_complementary_alpha_permille(
+				event->config.sample_interval_ms);
+			break;
+		case BSL_CONFIG_OP_SET_MAHONY_KP:
+			lsm6dsl_sensor_set_mahony_kp_milli(event->config.sample_interval_ms);
+			break;
+		case BSL_CONFIG_OP_SET_MAHONY_KI:
+			lsm6dsl_sensor_set_mahony_ki_milli(event->config.sample_interval_ms);
+			break;
+		default:
+			status.last_error = BSL_ERROR_INVALID_CONFIG;
+			publish_status();
+			return false;
+		}
 		update_optional_sensor_status();
-		sensor_dummy_set_interval(event->config.sample_interval_ms);
 		ble_service_set_config(&event->config);
 		publish_status();
 		return false;

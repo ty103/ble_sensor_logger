@@ -29,6 +29,7 @@ def test_web_app_exposes_expected_routes():
     assert ("POST", "/api/connect/cancel") in routes
     assert ("POST", "/api/start") in routes
     assert ("POST", "/api/interval") in routes
+    assert ("POST", "/api/orientation-filter") in routes
     assert ("GET", "/api/status") in routes
     assert ("GET", "/api/capability") in routes
     assert ("GET", "/ws") in routes
@@ -86,17 +87,22 @@ def test_web_frontend_has_orientation_view():
 
     assert 'id="orientationCanvas"' in index_html
     assert 'id="orientationMode"' in index_html
-    assert 'id="orientationPitch"' in index_html
-    assert 'id="orientationRoll"' in index_html
-    assert 'id="orientationZenith"' in index_html
-    assert 'id="orientationAccel"' in index_html
+    assert 'id="orientationNaivePitch"' in index_html
+    assert 'id="orientationComplementaryPitch"' in index_html
+    assert 'id="orientationMahonyPitch"' in index_html
+    assert 'id="orientationMahonyYaw"' in index_html
+    assert 'id="orientationToggleNaive"' in index_html
+    assert 'id="applyFilterButton"' in index_html
     assert 'from "/static/vendor/three.module.min.js"' in app_js
     assert "new THREE.WebGLRenderer" in app_js
     assert "stream_id: 13" in app_js
     assert 'stream_type: "ORIENTATION_MOTION"' in app_js
-    assert 'field: "pitch_filtered_cdeg"' in app_js
+    assert 'field: "pitch_complementary_cdeg"' in app_js
+    assert 'field: "pitch_mahony_cdeg"' in app_js
+    assert 'field: "yaw_mahony_cdeg"' in app_js
     assert 'field: "accel_norm_mg"' in app_js
-    assert "orientationAngle(source, \"pitch_filtered_cdeg\", \"pitch_naive_cdeg\")" in app_js
+    assert "orientationModeValues(source, mode)" in app_js
+    assert 'commandAndRefresh("/api/orientation-filter", body)' in app_js
     assert "updateOrientationView(sample)" in app_js
 
 
@@ -225,7 +231,9 @@ def test_capability_response_uses_stream_metadata():
         assert '"label": "Dummy Accel Z"' in body
         assert '"label": "LSM6DSL Accel Z"' in body
         assert '"label": "LSM303AGR Mag Z"' in body
-        assert '"label": "LSM6DSL Pitch Filtered"' in body
+        assert '"label": "LSM6DSL Pitch Complementary"' in body
+        assert '"label": "LSM6DSL Pitch Mahony"' in body
+        assert '"field": "yaw_mahony_cdeg"' in body
         assert '"field": "accel_norm_mg"' in body
         assert '"unit": "%RH"' in body
         assert '"unit": "degree"' in body
@@ -291,6 +299,36 @@ def test_set_interval_posts_stream_scoped_config():
         assert app.interval_calls == [(1, 250)]
         body = json.loads(response.text)
         assert body == {"ok": True, "stream_id": 1, "interval_ms": 250}
+
+    asyncio.run(run())
+
+
+def test_set_orientation_filter_posts_filter_config():
+    class FilterApp(SlowConnectApp):
+        def __init__(self):
+            super().__init__()
+            self.filter_calls = []
+
+        async def set_orientation_filter_params(self, complementary_alpha, mahony_kp, mahony_ki):
+            self.filter_calls.append((complementary_alpha, mahony_kp, mahony_ki))
+
+    async def run():
+        app = FilterApp()
+        backend = WebBackend(app)
+
+        response = await backend.set_orientation_filter(
+            JsonRequest({"complementary_alpha": 0.97, "mahony_kp": 0.6, "mahony_ki": 0.02})
+        )
+
+        assert response.status == 200
+        assert app.filter_calls == [(0.97, 0.6, 0.02)]
+        body = json.loads(response.text)
+        assert body == {
+            "ok": True,
+            "complementary_alpha": 0.97,
+            "mahony_kp": 0.6,
+            "mahony_ki": 0.02,
+        }
 
     asyncio.run(run())
 
@@ -399,14 +437,19 @@ def test_web_sample_json_marks_fields_outside_payload_as_null():
             pitch_naive_cdeg=-1234,
             roll_naive_cdeg=567,
             zenith_naive_cdeg=9012,
-            pitch_filtered_cdeg=-1200,
-            roll_filtered_cdeg=600,
-            zenith_filtered_cdeg=9000,
+            pitch_complementary_cdeg=-1200,
+            roll_complementary_cdeg=600,
+            zenith_complementary_cdeg=9000,
+            pitch_mahony_cdeg=-1190,
+            roll_mahony_cdeg=610,
+            zenith_mahony_cdeg=8990,
+            yaw_mahony_cdeg=42,
             accel_norm_mg=1001,
         )
     )
     assert orientation["pitch_naive_cdeg"] == -1234
-    assert orientation["roll_filtered_cdeg"] == 600
+    assert orientation["roll_complementary_cdeg"] == 600
+    assert orientation["yaw_mahony_cdeg"] == 42
     assert orientation["accel_norm_mg"] == 1001
     assert orientation["accel_z_mg"] is None
     assert orientation["mag_z_ut"] is None

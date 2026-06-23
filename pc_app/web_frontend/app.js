@@ -13,6 +13,10 @@ const elements = {
   streamSelect: $("streamSelect"),
   intervalInput: $("intervalInput"),
   applyIntervalButton: $("applyIntervalButton"),
+  complementaryAlphaInput: $("complementaryAlphaInput"),
+  mahonyKpInput: $("mahonyKpInput"),
+  mahonyKiInput: $("mahonyKiInput"),
+  applyFilterButton: $("applyFilterButton"),
   refreshStatusButton: $("refreshStatusButton"),
   metricsGrid: $("metricsGrid"),
   clearButton: $("clearButton"),
@@ -22,10 +26,22 @@ const elements = {
   orientationCanvas: $("orientationCanvas"),
   orientationState: $("orientationState"),
   orientationMode: $("orientationMode"),
-  orientationPitch: $("orientationPitch"),
-  orientationRoll: $("orientationRoll"),
-  orientationZenith: $("orientationZenith"),
-  orientationAccel: $("orientationAccel"),
+  orientationToggleNaive: $("orientationToggleNaive"),
+  orientationToggleComplementary: $("orientationToggleComplementary"),
+  orientationToggleMahony: $("orientationToggleMahony"),
+  orientationNaivePitch: $("orientationNaivePitch"),
+  orientationNaiveRoll: $("orientationNaiveRoll"),
+  orientationNaiveZenith: $("orientationNaiveZenith"),
+  orientationNaiveAccel: $("orientationNaiveAccel"),
+  orientationComplementaryPitch: $("orientationComplementaryPitch"),
+  orientationComplementaryRoll: $("orientationComplementaryRoll"),
+  orientationComplementaryZenith: $("orientationComplementaryZenith"),
+  orientationComplementaryAccel: $("orientationComplementaryAccel"),
+  orientationMahonyPitch: $("orientationMahonyPitch"),
+  orientationMahonyRoll: $("orientationMahonyRoll"),
+  orientationMahonyZenith: $("orientationMahonyZenith"),
+  orientationMahonyAccel: $("orientationMahonyAccel"),
+  orientationMahonyYaw: $("orientationMahonyYaw"),
   toast: $("toast"),
 };
 
@@ -33,6 +49,61 @@ const history = [];
 const maxHistoryPoints = 5000;
 const maxGraphSignals = 3;
 const graphColors = ["#176b5b", "#2f6fb5", "#a8482d"];
+const orientationModes = {
+  naive: {
+    label: "Naive",
+    color: 0x2f6fb5,
+    toggle: "orientationToggleNaive",
+    fields: {
+      pitch: "pitch_naive_cdeg",
+      roll: "roll_naive_cdeg",
+      zenith: "zenith_naive_cdeg",
+      accel: "accel_norm_mg",
+    },
+    readout: {
+      pitch: "orientationNaivePitch",
+      roll: "orientationNaiveRoll",
+      zenith: "orientationNaiveZenith",
+      accel: "orientationNaiveAccel",
+    },
+  },
+  complementary: {
+    label: "Complementary",
+    color: 0x176b5b,
+    toggle: "orientationToggleComplementary",
+    fields: {
+      pitch: "pitch_complementary_cdeg",
+      roll: "roll_complementary_cdeg",
+      zenith: "zenith_complementary_cdeg",
+      accel: "accel_norm_mg",
+    },
+    readout: {
+      pitch: "orientationComplementaryPitch",
+      roll: "orientationComplementaryRoll",
+      zenith: "orientationComplementaryZenith",
+      accel: "orientationComplementaryAccel",
+    },
+  },
+  mahony: {
+    label: "Mahony",
+    color: 0xa8482d,
+    toggle: "orientationToggleMahony",
+    fields: {
+      pitch: "pitch_mahony_cdeg",
+      roll: "roll_mahony_cdeg",
+      zenith: "zenith_mahony_cdeg",
+      accel: "accel_norm_mg",
+      yaw: "yaw_mahony_cdeg",
+    },
+    readout: {
+      pitch: "orientationMahonyPitch",
+      roll: "orientationMahonyRoll",
+      zenith: "orientationMahonyZenith",
+      accel: "orientationMahonyAccel",
+      yaw: "orientationMahonyYaw",
+    },
+  },
+};
 const graphConfigs = [
   { enabled: true, metricIds: [], yMode: "auto", yMin: null, yMax: null, xMode: "auto", xSeconds: 30 },
   { enabled: false, metricIds: [], yMode: "auto", yMin: null, yMax: null, xMode: "auto", xSeconds: 30 },
@@ -98,22 +169,50 @@ const fallbackCapability = {
           decimals: 2,
         },
         {
-          field: "pitch_filtered_cdeg",
-          label: "Orientation Pitch Filtered",
+          field: "pitch_complementary_cdeg",
+          label: "Orientation Pitch Complementary",
           unit: "deg",
           scale: 0.01,
           decimals: 2,
         },
         {
-          field: "roll_filtered_cdeg",
-          label: "Orientation Roll Filtered",
+          field: "roll_complementary_cdeg",
+          label: "Orientation Roll Complementary",
           unit: "deg",
           scale: 0.01,
           decimals: 2,
         },
         {
-          field: "zenith_filtered_cdeg",
-          label: "Orientation Zenith Filtered",
+          field: "zenith_complementary_cdeg",
+          label: "Orientation Zenith Complementary",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "pitch_mahony_cdeg",
+          label: "Orientation Pitch Mahony",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "roll_mahony_cdeg",
+          label: "Orientation Roll Mahony",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "zenith_mahony_cdeg",
+          label: "Orientation Zenith Mahony",
+          unit: "deg",
+          scale: 0.01,
+          decimals: 2,
+        },
+        {
+          field: "yaw_mahony_cdeg",
+          label: "Orientation Yaw Mahony",
           unit: "deg",
           scale: 0.01,
           decimals: 2,
@@ -210,8 +309,7 @@ const orientationState = {
   renderer: null,
   scene: null,
   camera: null,
-  cuboid: null,
-  edgeLines: null,
+  cuboids: {},
   lastSample: null,
   unavailable: false,
 };
@@ -249,6 +347,7 @@ function updateConnection(value, pending = false) {
   elements.resetButton.disabled = !value || pending;
   elements.streamSelect.disabled = !value || pending || elements.streamSelect.options.length === 0;
   elements.applyIntervalButton.disabled = !value || pending || elements.streamSelect.options.length === 0;
+  elements.applyFilterButton.disabled = !value || pending || !hasOrientationCapability();
   elements.refreshStatusButton.disabled = !value || pending;
 }
 
@@ -343,6 +442,7 @@ function renderCapability(capability, fromDevice) {
 
   renderStreamControls();
   renderGraphSignalControls();
+  elements.applyFilterButton.disabled = !connected || !hasOrientationCapability();
   updateOrientationView();
   drawCharts();
 }
@@ -528,39 +628,43 @@ function setupOrientationScene() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf8fafb);
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-    camera.position.set(3.4, 2.2, 4.2);
+    camera.position.set(4.6, 2.5, 5.8);
     camera.lookAt(0, 0, 0);
 
-    const cuboid = new THREE.Mesh(
-      new THREE.BoxGeometry(2.8, 0.34, 1.5),
-      [
-        new THREE.MeshStandardMaterial({ color: 0x2f6fb5, roughness: 0.58 }),
-        new THREE.MeshStandardMaterial({ color: 0x176b5b, roughness: 0.58 }),
-        new THREE.MeshStandardMaterial({ color: 0xb7c4cc, roughness: 0.62 }),
-        new THREE.MeshStandardMaterial({ color: 0xf0f4f6, roughness: 0.62 }),
-        new THREE.MeshStandardMaterial({ color: 0xa8482d, roughness: 0.52 }),
-        new THREE.MeshStandardMaterial({ color: 0xf2c94c, roughness: 0.52 }),
-      ]
-    );
-    const edgeLines = new THREE.LineSegments(
-      new THREE.EdgesGeometry(cuboid.geometry),
-      new THREE.LineBasicMaterial({ color: 0x26333d })
-    );
-    cuboid.add(edgeLines);
-    scene.add(cuboid);
+    const positions = { naive: -2.6, complementary: 0, mahony: 2.6 };
+    Object.entries(orientationModes).forEach(([key, mode]) => {
+      const geometry = new THREE.BoxGeometry(1.85, 0.28, 1.05);
+      const cuboid = new THREE.Mesh(
+        geometry,
+        [
+          new THREE.MeshStandardMaterial({ color: mode.color, roughness: 0.56 }),
+          new THREE.MeshStandardMaterial({ color: mode.color, roughness: 0.56 }),
+          new THREE.MeshStandardMaterial({ color: 0xb7c4cc, roughness: 0.62 }),
+          new THREE.MeshStandardMaterial({ color: 0xf0f4f6, roughness: 0.62 }),
+          new THREE.MeshStandardMaterial({ color: 0xf2c94c, roughness: 0.52 }),
+          new THREE.MeshStandardMaterial({ color: 0x26333d, roughness: 0.52 }),
+        ]
+      );
+      cuboid.position.x = positions[key];
+      cuboid.userData.baseX = positions[key];
+      cuboid.add(new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({ color: 0x26333d })
+      ));
+      scene.add(cuboid);
+      orientationState.cuboids[key] = cuboid;
+    });
     scene.add(new THREE.HemisphereLight(0xffffff, 0xb7c4cc, 2.5));
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.6);
     keyLight.position.set(3, 5, 4);
     scene.add(keyLight);
-    const grid = new THREE.GridHelper(4.2, 6, 0xcfd8de, 0xe4eaee);
+    const grid = new THREE.GridHelper(7.4, 8, 0xcfd8de, 0xe4eaee);
     grid.position.y = -0.72;
     scene.add(grid);
 
     orientationState.renderer = renderer;
     orientationState.scene = scene;
     orientationState.camera = camera;
-    orientationState.cuboid = cuboid;
-    orientationState.edgeLines = edgeLines;
   } catch (error) {
     orientationState.unavailable = true;
     elements.orientationState.textContent = "3D renderer unavailable";
@@ -584,56 +688,105 @@ function orientationRawValue(sample, field) {
   return sample ? numericValue(sample, field, 13) : null;
 }
 
-function orientationAngle(sample, filteredField, naiveField) {
-  const filtered = orientationRawValue(sample, filteredField);
-  if (filtered !== null) return { value: filtered * 0.01, mode: "Filtered" };
-  const naive = orientationRawValue(sample, naiveField);
-  if (naive !== null) return { value: naive * 0.01, mode: "Naive" };
-  return { value: null, mode: "Waiting" };
+function orientationScaledValue(sample, field) {
+  const raw = orientationRawValue(sample, field);
+  return raw === null ? null : raw * 0.01;
 }
 
-function setOrientationReadout(pitch, roll, zenith, accel, mode) {
-  elements.orientationMode.textContent = mode;
-  elements.orientationPitch.textContent = pitch.value === null ? "--" : pitch.value.toFixed(2);
-  elements.orientationRoll.textContent = roll.value === null ? "--" : roll.value.toFixed(2);
-  elements.orientationZenith.textContent = zenith.value === null ? "--" : zenith.value.toFixed(2);
-  elements.orientationAccel.textContent = accel === null ? "--" : String(Math.round(accel));
+function orientationModeValues(sample, mode) {
+  const config = orientationModes[mode];
+  return {
+    pitch: orientationScaledValue(sample, config.fields.pitch),
+    roll: orientationScaledValue(sample, config.fields.roll),
+    zenith: orientationScaledValue(sample, config.fields.zenith),
+    accel: orientationRawValue(sample, config.fields.accel),
+    yaw: config.fields.yaw ? orientationScaledValue(sample, config.fields.yaw) : null,
+  };
+}
+
+function setReadoutText(id, value, decimals = 2) {
+  elements[id].textContent = value === null ? "--" : value.toFixed(decimals);
+}
+
+function setOrientationReadout(source) {
+  Object.entries(orientationModes).forEach(([mode, config]) => {
+    const values = source ? orientationModeValues(source, mode) : {
+      pitch: null,
+      roll: null,
+      zenith: null,
+      accel: null,
+      yaw: null,
+    };
+    setReadoutText(config.readout.pitch, values.pitch);
+    setReadoutText(config.readout.roll, values.roll);
+    setReadoutText(config.readout.zenith, values.zenith);
+    setReadoutText(config.readout.accel, values.accel, 0);
+    if (config.readout.yaw) setReadoutText(config.readout.yaw, values.yaw);
+  });
+}
+
+function enabledOrientationModes() {
+  return Object.entries(orientationModes)
+    .filter(([_mode, config]) => elements[config.toggle].checked)
+    .map(([mode]) => mode);
+}
+
+function updateOrientationCards() {
+  Object.entries(orientationModes).forEach(([mode, config]) => {
+    const card = document.querySelector(`[data-orientation-card="${mode}"]`);
+    if (card) card.hidden = !elements[config.toggle].checked;
+  });
+}
+
+function applyCuboidPose(mode, values, visibleIndex, visibleCount) {
+  const cuboid = orientationState.cuboids[mode];
+  if (!cuboid) return;
+  const enabled = values.pitch !== null && values.roll !== null && elements[orientationModes[mode].toggle].checked;
+  cuboid.visible = enabled;
+  if (!enabled) return;
+  const spacing = 2.6;
+  cuboid.position.x = (visibleIndex - ((visibleCount - 1) / 2)) * spacing;
+  cuboid.rotation.x = THREE.MathUtils.degToRad(values.roll);
+  cuboid.rotation.y = values.yaw === null ? 0 : THREE.MathUtils.degToRad(values.yaw);
+  cuboid.rotation.z = THREE.MathUtils.degToRad(-values.pitch);
 }
 
 function updateOrientationView(sample = null) {
   if (!elements.orientationCanvas) return;
   if (sample?.stream_id === 13) orientationState.lastSample = sample;
   const source = sample?.stream_id === 13 ? sample : orientationState.lastSample;
+  updateOrientationCards();
 
   if (!hasOrientationCapability()) {
     elements.orientationState.textContent = "Orientation stream unavailable";
-    setOrientationReadout({ value: null }, { value: null }, { value: null }, null, "--");
+    elements.orientationMode.textContent = "--";
+    setOrientationReadout(null);
     renderOrientationScene();
     return;
   }
 
   if (!source) {
     elements.orientationState.textContent = "Waiting for orientation sample";
-    setOrientationReadout({ value: null }, { value: null }, { value: null }, null, "Waiting");
+    elements.orientationMode.textContent = "Waiting";
+    setOrientationReadout(null);
     renderOrientationScene();
     return;
   }
 
-  const pitch = orientationAngle(source, "pitch_filtered_cdeg", "pitch_naive_cdeg");
-  const roll = orientationAngle(source, "roll_filtered_cdeg", "roll_naive_cdeg");
-  const zenith = orientationAngle(source, "zenith_filtered_cdeg", "zenith_naive_cdeg");
-  const accel = orientationRawValue(source, "accel_norm_mg");
-  const usesFiltered = pitch.mode === "Filtered" && roll.mode === "Filtered";
-  const mode = usesFiltered ? "Filtered" : "Naive";
-  setOrientationReadout(pitch, roll, zenith, accel, mode);
-  elements.orientationState.textContent = `${mode} sample #${source.sequence ?? "--"}`;
+  const visibleModes = enabledOrientationModes();
+  setOrientationReadout(source);
+  elements.orientationMode.textContent = `${visibleModes.length} visible`;
+  elements.orientationState.textContent = `Orientation sample #${source.sequence ?? "--"}`;
 
   setupOrientationScene();
-  if (orientationState.cuboid && pitch.value !== null && roll.value !== null) {
-    orientationState.cuboid.rotation.x = THREE.MathUtils.degToRad(roll.value);
-    orientationState.cuboid.rotation.y = 0;
-    orientationState.cuboid.rotation.z = THREE.MathUtils.degToRad(-pitch.value);
-  }
+  visibleModes.forEach((mode, index) => {
+    applyCuboidPose(mode, orientationModeValues(source, mode), index, visibleModes.length);
+  });
+  Object.keys(orientationModes)
+    .filter((mode) => !visibleModes.includes(mode))
+    .forEach((mode) => {
+      if (orientationState.cuboids[mode]) orientationState.cuboids[mode].visible = false;
+    });
   renderOrientationScene();
 }
 
@@ -698,6 +851,27 @@ async function commandAndRefresh(path, body) {
   await command(path, body);
   await new Promise((resolve) => setTimeout(resolve, 100));
   await refreshStatus();
+}
+
+function boundedNumber(input, fallback) {
+  const value = Number(input.value);
+  if (!Number.isFinite(value)) return fallback;
+  const min = Number(input.min);
+  const max = Number(input.max);
+  return Math.min(max, Math.max(min, value));
+}
+
+async function applyOrientationFilters() {
+  const body = {
+    complementary_alpha: boundedNumber(elements.complementaryAlphaInput, 0.98),
+    mahony_kp: boundedNumber(elements.mahonyKpInput, 0.5),
+    mahony_ki: boundedNumber(elements.mahonyKiInput, 0),
+  };
+  elements.complementaryAlphaInput.value = body.complementary_alpha;
+  elements.mahonyKpInput.value = body.mahony_kp;
+  elements.mahonyKiInput.value = body.mahony_ki;
+  await commandAndRefresh("/api/orientation-filter", body);
+  showToast("Orientation filters applied");
 }
 
 function connectSocket() {
@@ -995,6 +1169,7 @@ elements.applyIntervalButton.addEventListener("click", () =>
     interval_ms: Number(elements.intervalInput.value),
   })
 );
+elements.applyFilterButton.addEventListener("click", applyOrientationFilters);
 elements.refreshStatusButton.addEventListener("click", refreshStatus);
 elements.clearButton.addEventListener("click", () => {
   history.length = 0;
@@ -1004,6 +1179,11 @@ elements.clearButton.addEventListener("click", () => {
   drawCharts();
 });
 elements.csvButton.addEventListener("click", toggleCsvRecording);
+[
+  elements.orientationToggleNaive,
+  elements.orientationToggleComplementary,
+  elements.orientationToggleMahony,
+].forEach((input) => input.addEventListener("change", updateOrientationView));
 graphElements.forEach((graph, index) => {
   const redraw = () => {
     syncGraphConfig(index);
