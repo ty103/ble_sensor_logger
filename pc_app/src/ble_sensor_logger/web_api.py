@@ -34,6 +34,13 @@ SAMPLE_VALUE_FIELDS = (
     "mag_x_ut",
     "mag_y_ut",
     "mag_z_ut",
+    "pitch_naive_cdeg",
+    "roll_naive_cdeg",
+    "zenith_naive_cdeg",
+    "pitch_filtered_cdeg",
+    "roll_filtered_cdeg",
+    "zenith_filtered_cdeg",
+    "accel_norm_mg",
 )
 FIELDS_BY_PAYLOAD_FORMAT = {
     PayloadFormat.DUMMY_ACCEL3_INT16_V1: (
@@ -55,6 +62,15 @@ FIELDS_BY_PAYLOAD_FORMAT = {
     ),
     PayloadFormat.LPS22HB_PRESSURE_INT32_V1: ("pressure_pa",),
     PayloadFormat.MAG3_INT16_V1: ("mag_x_ut", "mag_y_ut", "mag_z_ut"),
+    PayloadFormat.ORIENTATION_MOTION_INT16_V1: (
+        "pitch_naive_cdeg",
+        "roll_naive_cdeg",
+        "zenith_naive_cdeg",
+        "pitch_filtered_cdeg",
+        "roll_filtered_cdeg",
+        "zenith_filtered_cdeg",
+        "accel_norm_mg",
+    ),
 }
 FIELD_METADATA_BY_PAYLOAD_FORMAT = {
     PayloadFormat.DUMMY_ACCEL3_INT16_V1: (
@@ -168,6 +184,57 @@ FIELD_METADATA_BY_PAYLOAD_FORMAT = {
             "field": "mag_z_ut",
             "label": "LSM303AGR Mag Z",
             "unit": "uT",
+            "scale": 1,
+            "decimals": 0,
+        },
+    ),
+    PayloadFormat.ORIENTATION_MOTION_INT16_V1: (
+        {
+            "field": "pitch_naive_cdeg",
+            "label": "LSM6DSL Pitch Naive",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "roll_naive_cdeg",
+            "label": "LSM6DSL Roll Naive",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "zenith_naive_cdeg",
+            "label": "LSM6DSL Zenith Naive",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "pitch_filtered_cdeg",
+            "label": "LSM6DSL Pitch Filtered",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "roll_filtered_cdeg",
+            "label": "LSM6DSL Roll Filtered",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "zenith_filtered_cdeg",
+            "label": "LSM6DSL Zenith Filtered",
+            "unit": "degree",
+            "scale": 0.01,
+            "decimals": 2,
+        },
+        {
+            "field": "accel_norm_mg",
+            "label": "LSM6DSL Accel Norm",
+            "unit": "mg",
             "scale": 1,
             "decimals": 0,
         },

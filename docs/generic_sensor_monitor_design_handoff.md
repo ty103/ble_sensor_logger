@@ -649,15 +649,16 @@ codex/webgui-capability-driven
      - [ ] naive pitch/roll/zenith、filtered pitch/roll、filtered pitch/roll由来zenith、`accel_norm_mg` を固定小数点で計算し、int16範囲へclampする。
      - [ ] build/flash/RTTの初動では `firmware/docs/ai_quickstart.md` と `firmware/docs/build_flash_rtt_runbook.md` を参照し、ホーム配下の個人Skillに依存しない。
    - PC backend task:
-     - [ ] `pc_app/src/ble_sensor_logger/protocol.py` にpayload format、parse/pack、validation、default Capabilityを追加する。
-     - [ ] `pc_app/src/ble_sensor_logger/web_api.py` にfield metadataを追加し、角度はdegree表示、合成加速度はmg表示にscaleする。
-     - [ ] CUI表示、BLE smoke、negative smoke、protocol/web/app_core pytestを更新する。
+     - [x] `pc_app/src/ble_sensor_logger/protocol.py` にpayload format、parse/pack、validation、default Capabilityを追加する。
+     - [x] `pc_app/src/ble_sensor_logger/web_api.py` にfield metadataを追加し、角度はdegree表示、合成加速度はmg表示にscaleする。
+     - [x] CUI表示、BLE smoke、protocol/web/app_core pytestを更新する。negative smokeはmalformed write中心のため変更不要。
+     - [x] 2026-06-23: `codex/stream13-pc-backend` でsynthetic frame/CapabilityによるPC自動テストを実施し、`uv run --extra dev pytest` が31件pass。Firmware/WebGUI統合と実機BLE smokeは未実施。
    - WebGUI task:
      - [ ] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
      - [ ] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
      - [ ] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
    - 検証task:
-     - [ ] `pc_app/` で `uv run --extra dev pytest` を実行する。
+     - [x] `pc_app/` で `uv run --extra dev pytest` を実行する。2026-06-23 PC backend単独では31件pass。
      - [ ] Web frontendの構文確認を行う。
      - [ ] Firmware shield buildを行う。
      - [ ] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6` と `stream_id=13` を確認する。
@@ -755,5 +756,6 @@ codex/webgui-capability-driven
 - 2026-06-21: Config v4 `SET_STREAM_INTERVAL` を `stream_id=1` で実装し、Firmware build / flash / BLE smoke / negative smokeで確認済み。
 - 2026-06-21: `stream_id=1` を `DUMMY_ACCEL3_INT16_V1` へ整理し、dummy batteryとA0 ADCをactive pathから削除。PC自動テスト / Firmware build / flash / BLE smoke / negative smokeで確認済み。
 - 2026-06-23: WebGUIのinterval表示を全streamへ広げ、`DUMMY_ACCEL3` はEditable、実センサstreamはFixedとして表示するよう更新。PC自動テストで確認済み。
+- 2026-06-23: LSM6DSL派生姿勢stream `stream_id=13` のPC backend対応を実装。`ORIENTATION_MOTION_INT16_V1` のparse/pack、Capability field metadata、WebSocket sample JSON、CUI表示、BLE smoke出力を追加し、PC自動テスト31件で確認済み。Firmware/WebGUI統合と実機確認は未実施。
 
 過去履歴内の `次作業` は当時のメモであり、現在の優先順位は `現在の残課題 / 次回作業キュー` を正とする。
