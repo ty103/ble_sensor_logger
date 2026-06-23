@@ -14,6 +14,7 @@ from .protocol import (
     ControlPayload,
     CONFIG_VERSION,
     STREAM_ID_DUMMY_ACCEL3,
+    STREAM_ID_LSM6DSL_IMU6,
     STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
     SensorDataPayload,
     StatusPayload,
@@ -131,6 +132,30 @@ class SensorLoggerApp:
             reserved=0,
         )
         await self.client.write_config(payload.pack())
+
+    async def force_gyro_calib(self) -> None:
+        await self._write_command(Command.FORCE_GYRO_CALIB)
+
+    async def set_gyro_calib_params(
+        self,
+        threshold_mdps: int,
+        alpha_permille: int,
+        window_samples: int,
+    ) -> None:
+        for op, value in (
+            (ConfigOp.SET_GYRO_CALIB_THRESHOLD, threshold_mdps),
+            (ConfigOp.SET_GYRO_CALIB_ALPHA, alpha_permille),
+            (ConfigOp.SET_GYRO_CALIB_WINDOW, window_samples),
+        ):
+            payload = ConfigPayload(
+                version=CONFIG_VERSION,
+                op=op,
+                stream_id=STREAM_ID_LSM6DSL_IMU6,
+                flags=0,
+                sample_interval_ms=value,
+                reserved=0,
+            )
+            await self.client.write_config(payload.pack())
 
     def set_disconnect_handler(self, handler: DisconnectHandler | None) -> None:
         self._disconnect_handler = handler

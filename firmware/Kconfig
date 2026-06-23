@@ -28,4 +28,31 @@ config BSL_ORIENTATION_GRAVITY_AXIS
 	  +Z, and -Z. This must not use the same physical axis as the front
 	  axis.
 
+config BSL_GYRO_CALIB_THRESHOLD_MDPS
+	int "Gyro auto-calibration still threshold in mdps"
+	default 50
+	range 10 1000
+	help
+	  Per-axis threshold in milli-degrees-per-second. The auto-calibration
+	  considers the device still when all three calibrated gyro axes stay
+	  within this threshold for the configured window of consecutive samples.
+
+config BSL_GYRO_CALIB_ALPHA_PERMILLE
+	int "Gyro auto-calibration bias lerp rate in permille"
+	default 5
+	range 0 1000
+	help
+	  IIR coefficient for gradually applying the bias offset, expressed as
+	  permille (0-1000 maps to 0.000-1.000). A lower value makes corrections
+	  smoother and slower. Default 5 (0.005 per sample at 26 Hz).
+
+config BSL_GYRO_CALIB_WINDOW_SAMPLES
+	int "Gyro auto-calibration consecutive still samples required"
+	default 26
+	range 5 260
+	help
+	  Number of consecutive samples the device must remain still before the
+	  bias update is applied. At 26 Hz the default of 26 corresponds to
+	  approximately 1 second.
+
 endmenu

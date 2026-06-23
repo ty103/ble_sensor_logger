@@ -354,3 +354,97 @@ def test_capability_round_trip():
     assert parsed.streams[5].payload_format.name == "MAG3_INT16_V1"
     assert parsed.preferred_mtu == SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
     assert parsed.supported_commands & (1 << int(Command.START_MEASUREMENT))
+
+
+def test_force_gyro_calib_command_round_trip():
+    payload = ControlPayload.from_command(Command.FORCE_GYRO_CALIB)
+    assert payload.command == Command.FORCE_GYRO_CALIB
+    assert ControlPayload.unpack(payload.pack()) == payload
+
+
+def test_config_gyro_calib_threshold_round_trip():
+    payload = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_GYRO_CALIB_THRESHOLD,
+        stream_id=10,
+        flags=0,
+        sample_interval_ms=100,
+        reserved=0,
+    )
+    assert ConfigPayload.unpack(payload.pack()) == payload
+
+
+def test_config_gyro_calib_alpha_round_trip():
+    payload = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_GYRO_CALIB_ALPHA,
+        stream_id=10,
+        flags=0,
+        sample_interval_ms=5,
+        reserved=0,
+    )
+    assert ConfigPayload.unpack(payload.pack()) == payload
+
+
+def test_config_gyro_calib_window_round_trip():
+    payload = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_GYRO_CALIB_WINDOW,
+        stream_id=10,
+        flags=0,
+        sample_interval_ms=26,
+        reserved=0,
+    )
+    assert ConfigPayload.unpack(payload.pack()) == payload
+
+
+def test_config_gyro_calib_rejects_wrong_stream_id():
+    payload = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_GYRO_CALIB_THRESHOLD,
+        stream_id=13,  # wrong: must be IMU6=10
+        flags=0,
+        sample_interval_ms=50,
+        reserved=0,
+    )
+    with pytest.raises(ProtocolError):
+        payload.pack()
+
+
+def test_config_gyro_calib_rejects_threshold_out_of_range():
+    payload = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_GYRO_CALIB_THRESHOLD,
+        stream_id=10,
+        flags=0,
+        sample_interval_ms=5,  # below min of 10
+        reserved=0,
+    )
+    with pytest.raises(ProtocolError):
+        payload.pack()
+
+
+def test_config_gyro_calib_rejects_alpha_out_of_range():
+    payload = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_GYRO_CALIB_ALPHA,
+        stream_id=10,
+        flags=0,
+        sample_interval_ms=1001,  # above max of 1000
+        reserved=0,
+    )
+    with pytest.raises(ProtocolError):
+        payload.pack()
+
+
+def test_config_gyro_calib_rejects_window_out_of_range():
+    payload = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_GYRO_CALIB_WINDOW,
+        stream_id=10,
+        flags=0,
+        sample_interval_ms=261,  # above max of 260
+        reserved=0,
+    )
+    with pytest.raises(ProtocolError):
+        payload.pack()

@@ -58,6 +58,7 @@ enum bsl_command {
 	BSL_COMMAND_STOP_MEASUREMENT = 0x02,
 	BSL_COMMAND_REQUEST_STATUS = 0x03,
 	BSL_COMMAND_RESET_SEQUENCE = 0x04,
+	BSL_COMMAND_FORCE_GYRO_CALIB = 0x05,
 };
 
 enum bsl_config_op {
@@ -66,6 +67,10 @@ enum bsl_config_op {
 	BSL_CONFIG_OP_SET_MAHONY_KP = 0x03,
 	BSL_CONFIG_OP_SET_MAHONY_KI = 0x04,
 	BSL_CONFIG_OP_SET_IIR_CUTOFF_MILLIHZ = 0x05,
+	/* Gyro auto-calibration parameters (stream_id=10, value in sample_interval_ms field) */
+	BSL_CONFIG_OP_SET_GYRO_CALIB_THRESHOLD = 0x06,  /* still threshold in mdps */
+	BSL_CONFIG_OP_SET_GYRO_CALIB_ALPHA = 0x07,      /* bias lerp rate in permille (0-1000) */
+	BSL_CONFIG_OP_SET_GYRO_CALIB_WINDOW = 0x08,     /* consecutive still samples required */
 };
 
 enum bsl_device_state {

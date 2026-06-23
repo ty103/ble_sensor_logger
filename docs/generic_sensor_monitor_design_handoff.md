@@ -696,7 +696,18 @@ codex/webgui-capability-driven
      - 2026-06-23 `codex/orientation-iir-filter`でPC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smokeまで完了。実ブラウザ確認は未実施。
      - 2026-06-23 `codex/mahony-orientation-stream`でPC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smoke、実ブラウザ確認まで完了。`firmware/.env` はこのworktreeに無かったため、`firmware/.env.template` をsourceした。
 
-2. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
+2. ジャイロ自動キャリブレーション実装完了（`agents/gyro-auto-calibration-firmware`）。
+   - Firmware: 静止検出ベース自動キャリブレーション + Force Calib コマンド
+     - `BSL_COMMAND_FORCE_GYRO_CALIB=0x05`: 即時 bias 反映（5秒静止後にGUIからボタン押し想定）
+     - `BSL_CONFIG_OP_SET_GYRO_CALIB_THRESHOLD=0x06` / `SET_GYRO_CALIB_ALPHA=0x07` / `SET_GYRO_CALIB_WINDOW=0x08` (stream_id=10)
+     - KConfig デフォルト: threshold=50 mdps / alpha=5 permille / window=26 samples (~1 s at 26 Hz)
+     - じわじわ補正: auto-calibは bias を IIR (alpha per sample) で徐々に適用、force calibは即時適用
+   - PC: `force_gyro_calib()` / `set_gyro_calib_params()` 追加、`/api/force-gyro-calib` / `/api/gyro-calib-config` エンドポイント追加
+   - GUI: Still threshold / Bias alpha / Still window 入力 + Apply auto-calib config ボタン + Force Calibボタン追加
+   - PC自動テスト49件パス、Firmware shield build (FLASH 20.40%, RAM 14.32%) 完了
+   - 次作業: `master` merge前に実機 flash / BLE smoke / GUI実ブラウザ確認が必要
+
+3. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
    - Config v4次段候補: `SET_STREAM_ENABLE`、実センサstreamのrate変更、Config Response。
    - Status Notify候補: start/stop/config/errorのpush通知。
    - Log/Event候補: optional sensor詳細診断、I2C scan結果、Firmware warning。
@@ -789,5 +800,6 @@ codex/webgui-capability-driven
 - 2026-06-23: WebGUIのinterval表示を全streamへ広げ、`DUMMY_ACCEL3` はEditable、実センサstreamはFixedとして表示するよう更新。PC自動テストで確認済み。
 - 2026-06-23: `codex/mahony-orientation-stream` でLSM6DSL派生姿勢stream `stream_id=13` をMahony拡張。Naive / 相補フィルタ / Mahony filterのpitch/roll/zenith、Mahony yaw、合成加速度をBLEに載せ、GUIで3方式同時表示・表示切替・filter parameter設定を実装。PC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smoke、実ブラウザ確認まで完了。
 - 2026-06-23: `codex/orientation-iir-filter` で `stream_id=13` を `ORIENTATION_MOTION_INT16_V2` へ更新し、IIR pitch/roll/zenith、IIR cutoff Config、Orientationエリア内filter設定、Raw live折りたたみを追加。PC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smokeまで完了。
+- 2026-06-23: `agents/gyro-auto-calibration-firmware` でジャイロ自動キャリブレーション実装。静止検出ベースじわじわ補正（threshold/alpha/window をConfig v4で変更可）と Force Calib コマンド（即時補正）をFirmware/PC/GUIへ追加。PC自動テスト49件、Firmware shield build完了。実機確認は未実施。
 
 過去履歴内の `次作業` は当時のメモであり、現在の優先順位は `現在の残課題 / 次回作業キュー` を正とする。

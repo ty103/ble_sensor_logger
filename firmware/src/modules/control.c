@@ -98,6 +98,9 @@ static bool app_event_handler(const struct app_event_header *aeh)
 			lsm303agr_magn_sensor_reset_sequence();
 			sensor_dummy_reset_sequence();
 			break;
+		case BSL_COMMAND_FORCE_GYRO_CALIB:
+			lsm6dsl_sensor_force_gyro_calib();
+			break;
 		default:
 			status.last_error = BSL_ERROR_INVALID_COMMAND;
 			break;
@@ -126,6 +129,18 @@ static bool app_event_handler(const struct app_event_header *aeh)
 			break;
 		case BSL_CONFIG_OP_SET_IIR_CUTOFF_MILLIHZ:
 			lsm6dsl_sensor_set_iir_cutoff_millihz(
+				event->config.sample_interval_ms);
+			break;
+		case BSL_CONFIG_OP_SET_GYRO_CALIB_THRESHOLD:
+			lsm6dsl_sensor_set_gyro_calib_threshold_mdps(
+				event->config.sample_interval_ms);
+			break;
+		case BSL_CONFIG_OP_SET_GYRO_CALIB_ALPHA:
+			lsm6dsl_sensor_set_gyro_calib_alpha_permille(
+				event->config.sample_interval_ms);
+			break;
+		case BSL_CONFIG_OP_SET_GYRO_CALIB_WINDOW:
+			lsm6dsl_sensor_set_gyro_calib_window_samples(
 				event->config.sample_interval_ms);
 			break;
 		default:
