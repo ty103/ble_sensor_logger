@@ -78,7 +78,7 @@ PC:
 | Status | Read | Device状態、エラー、接続回数など |
 | Capability | Read | 最小stream metadata、対応command/feature |
 
-現行payloadはLittle Endian固定長binaryで、Protocol v3である。Sensor Dataは12 bytes header + stream-specific payloadの16-34 bytes frameで、`stream_id`を持つ。
+現行payloadはLittle Endian固定長binaryで、Protocol v3である。Sensor Dataは12 bytes header + stream-specific payloadの16-40 bytes frameで、`stream_id`を持つ。
 
 ## 4. 合意済みの設計判断
 
@@ -182,7 +182,7 @@ payload {
 }
 ```
 
-現行payloadは、常時有効な `stream_id=1`、`payload_format=DUMMY_ACCEL3_INT16_V1`、`payload_len=6` のdummy accel3 sampleと、LSM6DSLがreadyな場合だけ有効な `stream_id=10`、`payload_format=IMU6_INT16_V1`、`payload_len=12` のIMU6 sample、HTS221がreadyな場合だけ有効な `stream_id=30`、`payload_format=HTS221_TEMP_HUMIDITY_INT16_V1`、`payload_len=4` のhumidity/temperature sample、LPS22HBがreadyな場合だけ有効な `stream_id=20`、`payload_format=LPS22HB_PRESSURE_INT32_V1`、`payload_len=4` のpressure sample、LSM303AGR magnetometerがreadyな場合だけ有効な `stream_id=12`、`payload_format=MAG3_INT16_V1`、`payload_len=6` のmagnetometer sampleである。試作段階のため、旧Sensor Data v1/v2 payloadとの後方互換は持たない。
+現行payloadは、常時有効な `stream_id=1`、`payload_format=DUMMY_ACCEL3_INT16_V1`、`payload_len=6` のdummy accel3 sampleと、LSM6DSLがreadyな場合だけ有効な `stream_id=10`、`payload_format=IMU6_INT16_V1`、`payload_len=12` のIMU6 sample、同じくLSM6DSL由来の `stream_id=13`、`payload_format=ORIENTATION_MOTION_INT16_V2`、`payload_len=28` のorientation sample、HTS221がreadyな場合だけ有効な `stream_id=30`、`payload_format=HTS221_TEMP_HUMIDITY_INT16_V1`、`payload_len=4` のhumidity/temperature sample、LPS22HBがreadyな場合だけ有効な `stream_id=20`、`payload_format=LPS22HB_PRESSURE_INT32_V1`、`payload_len=4` のpressure sample、LSM303AGR magnetometerがreadyな場合だけ有効な `stream_id=12`、`payload_format=MAG3_INT16_V1`、`payload_len=6` のmagnetometer sampleである。試作段階のため、旧Sensor Data v1/v2 payloadや旧orientation v1 payloadとの後方互換は持たない。
 
 ### 7.2 stream_id
 
@@ -297,13 +297,16 @@ fields:
 ```text
 stream_id = 13
 stream_type = ORIENTATION_MOTION
-payload_format = ORIENTATION_MOTION_INT16_V1
+payload_format = ORIENTATION_MOTION_INT16_V2
 rate = LSM6DSL IMU6 streamと同じ26 Hz
-payload_len = 22
+payload_len = 28
 fields:
   int16 pitch_naive_cdeg
   int16 roll_naive_cdeg
   int16 zenith_naive_cdeg
+  int16 pitch_iir_cdeg
+  int16 roll_iir_cdeg
+  int16 zenith_iir_cdeg
   int16 pitch_complementary_cdeg
   int16 roll_complementary_cdeg
   int16 zenith_complementary_cdeg
@@ -314,7 +317,7 @@ fields:
   int16 accel_norm_mg
 ```
 
-角度は0.01 degree単位のcenti-degreeとする。ピッチ/ロール/yawは原則 `-18000..18000`、ゼニスは `0..18000`、合成加速度はmg単位とし、範囲外はint16へclampする。このpayloadはSensor Data frame v3 header 12 bytesと合わせて34 bytesとなる。現行firmwareはATT MTU拡張を前提にしているため、1 notifyに収まる。
+角度は0.01 degree単位のcenti-degreeとする。ピッチ/ロール/yawは原則 `-18000..18000`、ゼニスは `0..18000`、合成加速度はmg単位とし、範囲外はint16へclampする。このpayloadはSensor Data frame v3 header 12 bytesと合わせて40 bytesとなる。現行firmwareはATT MTU拡張を前提にしているため、1 notifyに収まる。
 
 軸定義はKConfigで明示する。最低限、device正面方向と、基準姿勢で重力方向が加速度センサのどの軸に対応するかを `+X/-X/+Y/-Y/+Z/-Z` から選ぶ。
 
@@ -329,6 +332,7 @@ CONFIG_BSL_ORIENTATION_GRAVITY_AXIS=+X|-X|+Y|-Y|+Z|-Z
 
 - 合成加速度は `sqrt(ax^2 + ay^2 + az^2)` をmgで計算する。
 - naive pitch/roll/zenithは、加速度ベクトルを重力方向とみなして三角関数で計算する。
+- IIR pitch/roll/zenithはgyroを使わず、device座標系へ射影した加速度から計算したnaive pitch/roll/zenithを一次IIR filterへ入力して計算する。cutoff frequencyはConfig v4 op `SET_IIR_CUTOFF_MILLIHZ` でGUIから変更できる。
 - complementary pitch/rollはLSM6DSL gyro積分とaccel由来姿勢の相補フィルタで計算する。`alpha` はConfig v4 op `SET_COMPLEMENTARY_ALPHA` でGUIから変更できる。
 - Mahony pitch/roll/zenith/yawはLSM6DSL accel + gyroを入力にしたMahony filterで計算する。現行yawはmagnetometer補正なしのためdriftし得る。`K_p` / `K_i` はConfig v4 op `SET_MAHONY_KP` / `SET_MAHONY_KI` でGUIから変更できる。
 - complementary zenithとMahony zenithは、それぞれのpitch/rollからdevice重力軸と鉛直方向のなす角として再計算する。
@@ -336,9 +340,9 @@ CONFIG_BSL_ORIENTATION_GRAVITY_AXIS=+X|-X|+Y|-Y|+Z|-Z
 
 PC/WebGUI方針:
 
-- `pc_app` は `ORIENTATION_MOTION_INT16_V1` をparseし、`/api/capability` のbackend補完field metadataへ角度と合成加速度のlabel/unit/scale/decimalsを追加する。Capability schema v1へfield descriptorは追加しない。
+- `pc_app` は `ORIENTATION_MOTION_INT16_V2` をparseし、`/api/capability` のbackend補完field metadataへ角度と合成加速度のlabel/unit/scale/decimalsを追加する。Capability schema v1へfield descriptorは追加しない。
 - 最新値カード、graph selector、CSV列は既存のCapability-driven経路に乗せる。CSV列名は `s13_pitch_naive_cdeg` のように `s<stream_id>_<field>` とする。
-- WebGUIには姿勢専用の3D cuboid viewを追加する。Naive、相補フィルタ、Mahony filterの3方式を同時表示でき、方式ごとの表示/非表示を切り替えられる。3D描画はThree.jsを使い、runtimeで外部CDNに依存しない形で導入する。
+- WebGUIには姿勢専用の3D cuboid viewを追加する。Naive、IIR、相補フィルタ、Mahony filterの4方式を同時表示でき、方式ごとの表示/非表示を切り替えられる。各filter parameter変更はOrientationエリア内で行う。3D描画はThree.jsを使い、runtimeで外部CDNに依存しない形で導入する。
 
 ### 8.5 payload表現
 
@@ -396,7 +400,7 @@ ConfigStreamPayloadV4 {
 }
 ```
 
-実装済み `op` は `SET_STREAM_INTERVAL`、`SET_COMPLEMENTARY_ALPHA`、`SET_MAHONY_KP`、`SET_MAHONY_KI` である。Characteristic UUIDは維持し、payload version `4` でstream-scoped Configとして扱う。`SET_STREAM_INTERVAL` のFirmware変更対象は `stream_id=1` の `DUMMY_ACCEL3` intervalに限定し、実センサstreamは固定rateのまま扱う。Orientation filter設定では既存8 bytes payloadの `sample_interval_ms` fieldをop-specific valueとして使い、alphaはpermille、Mahony gainはmilli gainで送る。
+実装済み `op` は `SET_STREAM_INTERVAL`、`SET_COMPLEMENTARY_ALPHA`、`SET_MAHONY_KP`、`SET_MAHONY_KI`、`SET_IIR_CUTOFF_MILLIHZ` である。Characteristic UUIDは維持し、payload version `4` でstream-scoped Configとして扱う。`SET_STREAM_INTERVAL` のFirmware変更対象は `stream_id=1` の `DUMMY_ACCEL3` intervalに限定し、実センサstreamは固定rateのまま扱う。Orientation filter設定では既存8 bytes payloadの `sample_interval_ms` fieldをop-specific valueとして使い、alphaはpermille、Mahony gainはmilli gain、IIR cutoffはmilli-Hzで送る。
 
 `SET_STREAM_ENABLE`、実センサstreamのrate変更、TLV形式、Config Request/Response、複数項目一括更新は、Config v4最小実装とorientation filter設定の実機確認後の次段候補として再検討する。
 
@@ -600,10 +604,11 @@ codex/webgui-capability-driven
 
 ### 優先度高
 
-1. LSM6DSL派生姿勢stream `stream_id=13` のMahony拡張とGUI filter設定を完了済みとする。
+1. LSM6DSL派生姿勢stream `stream_id=13` のIIR拡張とGUI filter設定集約を完了済みとする。
    - 2026-06-23 `codex/mahony-orientation-stream` で、Firmware/PC/WebGUI/docsを更新し、実機build/flash/BLE smoke/実ブラウザ確認まで完了。
-   - Naive、相補フィルタ、Mahony filterの3方式を同一 `ORIENTATION_MOTION_INT16_V1` payloadで送る。Mahony yawはmagnetometer補正なしのためdriftし得る。
-   - GUIからConfig v4で相補フィルタ `alpha`、Mahony `K_p` / `K_i` を設定変更できる。
+   - 2026-06-23 `codex/orientation-iir-filter` で、IIR pitch/roll/zenithを追加し、`ORIENTATION_MOTION_INT16_V2` payloadへ更新。PC自動テスト、Web frontend構文確認、Firmware shield build、flash、BLE smokeまで完了。実ブラウザ確認は未実施。
+   - Naive、IIR、相補フィルタ、Mahony filterの4方式を同一 `ORIENTATION_MOTION_INT16_V2` payloadで送る。Mahony yawはmagnetometer補正なしのためdriftし得る。
+   - GUIからConfig v4でIIR cutoff frequency、相補フィルタ `alpha`、Mahony `K_p` / `K_i` をOrientationエリア内で設定変更できる。
    - 並行開発前提の進め方:
      - [x] まずこのhandoffの `stream_id=13` interface lockを正とし、docs-onlyの準備commitを共通baseへ入れる。その後、Firmware / PC backend / WebGUIの各チャットは同じbase commitから作業branchまたはworktreeを作る。
      - [x] 推奨branch名は `codex/stream13-firmware`、`codex/stream13-pc-backend`、`codex/stream13-webgui`、統合用は `codex/stream13-orientation-integration` とする。実装branch同士を直接mergeせず、統合branchへ順に取り込む。
@@ -613,19 +618,22 @@ codex/webgui-capability-driven
    - `stream_id=13` interface lock:
      - `stream_id`: `13`
      - `stream_type`: `ORIENTATION_MOTION` / enum value `6`
-     - `payload_format`: `ORIENTATION_MOTION_INT16_V1` / enum value `6`
+     - `payload_format`: `ORIENTATION_MOTION_INT16_V2` / enum value `7`
      - `data_type`: `INT16`
      - `unit`: `MIXED`
-     - `channel_count`: `11`
-     - `payload_len`: `22`
+     - `channel_count`: `14`
+     - `payload_len`: `28`
      - `rate/default_interval`: LSM6DSL IMU6と同じ26 Hz / `38 ms`
-     - `Capability`: LSM6DSLがreadyな場合のみ `stream_id=10` と一緒に含める。`BSL_CAPABILITY_MAX_STREAMS` は6、`preferred_mtu` は少なくともSensor Data header 12 bytes + payload 22 bytes = 34 bytesを表す値へ更新する。
+     - `Capability`: LSM6DSLがreadyな場合のみ `stream_id=10` と一緒に含める。`BSL_CAPABILITY_MAX_STREAMS` は6、`preferred_mtu` は少なくともSensor Data header 12 bytes + payload 28 bytes = 40 bytesを表す値へ更新する。
      - `Sensor Data`: Little Endian、Sensor Data frame v3 headerは既存通り。payloadは次の順序で固定する。
 
        ```text
        int16 pitch_naive_cdeg
        int16 roll_naive_cdeg
        int16 zenith_naive_cdeg
+       int16 pitch_iir_cdeg
+       int16 roll_iir_cdeg
+       int16 zenith_iir_cdeg
        int16 pitch_complementary_cdeg
        int16 roll_complementary_cdeg
        int16 zenith_complementary_cdeg
@@ -643,6 +651,9 @@ codex/webgui-capability-driven
        | `pitch_naive_cdeg` | degree | 0.01 | `s13_pitch_naive_cdeg` |
        | `roll_naive_cdeg` | degree | 0.01 | `s13_roll_naive_cdeg` |
        | `zenith_naive_cdeg` | degree | 0.01 | `s13_zenith_naive_cdeg` |
+       | `pitch_iir_cdeg` | degree | 0.01 | `s13_pitch_iir_cdeg` |
+       | `roll_iir_cdeg` | degree | 0.01 | `s13_roll_iir_cdeg` |
+       | `zenith_iir_cdeg` | degree | 0.01 | `s13_zenith_iir_cdeg` |
        | `pitch_complementary_cdeg` | degree | 0.01 | `s13_pitch_complementary_cdeg` |
        | `roll_complementary_cdeg` | degree | 0.01 | `s13_roll_complementary_cdeg` |
        | `zenith_complementary_cdeg` | degree | 0.01 | `s13_zenith_complementary_cdeg` |
@@ -658,29 +669,31 @@ codex/webgui-capability-driven
      - WebGUI taskは `pc_app/web_frontend/` を主に編集し、Python backendのprotocol/parserは触らない。開発中はfallback Capabilityまたはfixture sampleで3D表示を確認し、統合後に実backendへ接続して確認する。
      - `pc_app/tests/test_web_api.py` はPC backendとWebGUIの両方が触りやすいので、PC backend側はAPI JSON/field metadata、WebGUI側はstatic asset/HTML/JS存在確認に範囲を限定する。重複変更が出た場合は統合branchで解消する。
    - Firmware task:
-     - [x] `firmware/src/protocol/protocol.h` / `protocol.c` に `BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION=13`、`BSL_STREAM_TYPE_ORIENTATION_MOTION`、`BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1`、22 bytes payload、`BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE` 更新、`BSL_CAPABILITY_MAX_STREAMS=6` を追加する。
+     - [x] `firmware/src/protocol/protocol.h` / `protocol.c` に `BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION=13`、`BSL_STREAM_TYPE_ORIENTATION_MOTION`、`BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V2`、28 bytes payload、`BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE` 更新、`BSL_CAPABILITY_MAX_STREAMS=6` を追加する。
      - [x] LSM6DSL sampling pathでIMU6 sampleと同じfetch結果からorientation sampleを生成し、measurement start/stop、sequence reset、availabilityをLSM6DSL streamと同期する。
      - [x] KConfigで `CONFIG_BSL_ORIENTATION_FRONT_AXIS` と `CONFIG_BSL_ORIENTATION_GRAVITY_AXIS` を追加し、`+X/-X/+Y/-Y/+Z/-Z` から選べるようにする。同じ物理軸の組み合わせはbuild時またはinit時に拒否する。
-     - [x] naive pitch/roll/zenith、complementary pitch/roll/zenith、Mahony pitch/roll/zenith/yaw、`accel_norm_mg` を固定小数点で計算し、int16範囲へclampする。
+     - [x] naive pitch/roll/zenith、IIR pitch/roll/zenith、complementary pitch/roll/zenith、Mahony pitch/roll/zenith/yaw、`accel_norm_mg` を固定小数点で計算し、int16範囲へclampする。
      - [x] build/flash/RTTの初動では `firmware/docs/ai_quickstart.md` と `firmware/docs/runbooks/` を参照し、ホーム配下の個人Skillに依存しない。
      - 2026-06-23 `codex/mahony-orientation-stream`: Firmware側Mahony拡張とConfig setterを追加し、shield build / flash / BLE smokeで確認済み。
    - PC backend task:
      - [x] `pc_app/src/ble_sensor_logger/protocol.py` にpayload format、parse/pack、validation、default Capabilityを追加する。
      - [x] `pc_app/src/ble_sensor_logger/web_api.py` にfield metadataを追加し、角度はdegree表示、合成加速度はmg表示にscaleする。
      - [x] CUI表示、BLE smoke、protocol/web/app_core pytestを更新する。negative smokeはmalformed write中心のため変更不要。
-     - [x] 2026-06-23: Mahony拡張後のsynthetic frame/Capability/APIによるPC自動テストを実施し、`uv run --extra dev pytest` が35件pass。Firmware/WebGUI統合と実機BLE smokeも完了。
+     - [x] 2026-06-23: IIR拡張後のsynthetic frame/Capability/APIによるPC自動テストを実施し、`uv run --extra dev pytest` が35件pass。Firmware build、flash、BLE smokeまで完了。
    - WebGUI task:
      - [x] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
-     - [x] Naive、相補フィルタ、Mahony filterの3つの直方体を同時表示できる3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
-     - [x] 3D viewは未接続/未到着時、3方式表示時、方式別表示/非表示切替時の表示状態を持つ。
+     - [x] Naive、IIR、相補フィルタ、Mahony filterの4つの直方体を同時表示できる3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
+     - [x] 3D viewは未接続/未到着時、4方式表示時、方式別表示/非表示切替時の表示状態を持つ。
+     - [x] filter parameter変更UIをOrientationエリアへ集約し、生データのLive表示を折りたたみ可能にする。
      - [x] 統合後、実backendからの `/api/capability` と WebSocket sampleで `stream_id=13` の最新値、graph、CSV列、3D cuboidが更新されることを実ブラウザで確認する。
    - 検証task:
-     - [x] `pc_app/` で `uv run --extra dev pytest` を実行する。Mahony拡張後に35件pass。
+     - [x] `pc_app/` で `uv run --extra dev pytest` を実行する。IIR拡張後に35件pass。
      - [x] Web frontendの構文確認を行う。`node --check pc_app/web_frontend/app.js` 成功。
-     - [x] Firmware shield buildを行う。`build/stream13-integration` で成功。
-     - [x] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6` と `stream_id=13` を確認する。
-     - [x] BLE smokeで `stream_id=10` と `stream_id=13` のsampleが同じ測定中に流れること、CSVに `s13_*` 列が出ることを確認する。
-     - [x] WebGUIを実ブラウザで確認し、数値表示、graph、3D cuboidが更新されることをPlaywright screenshotまたは同等の方法で確認する。
+     - [x] Firmware shield buildを行う。`build/orientation-iir` で成功。
+     - [x] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6`、`stream_id=13`、`ORIENTATION_MOTION_INT16_V2`、`channels=14` を確認する。
+     - [x] BLE smokeで `stream_id=10` と `stream_id=13` のsampleが同じ測定中に流れること、`pitch_iir_cdeg` / `roll_iir_cdeg` / `zenith_iir_cdeg` がnotify payloadに含まれることを確認する。
+     - [ ] WebGUIを実ブラウザで確認し、数値表示、graph、4方式3D cuboid、Orientation内filter設定、Raw live折りたたみが動くことをPlaywright screenshotまたは同等の方法で確認する。
+     - 2026-06-23 `codex/orientation-iir-filter`でPC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smokeまで完了。実ブラウザ確認は未実施。
      - 2026-06-23 `codex/mahony-orientation-stream`でPC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smoke、実ブラウザ確認まで完了。`firmware/.env` はこのworktreeに無かったため、`firmware/.env.template` をsourceした。
 
 2. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
@@ -718,9 +731,9 @@ codex/webgui-capability-driven
 1. 新Service/Characteristic UUID体系
 2. Capability payload形式の拡張方針（現行schema v1はstream descriptorまで。field metadataがFirmware由来で必要になった時点でschema v2/TLV化を検討する）
 3. Sensor Data frame形式の拡張方針（現行v3 headerからbatching/fragmentationへ進めるか）
-4. stream_idとpayload format idの管理方法。現行は `stream_id=1`, `DUMMY_ACCEL3_INT16_V1`, `stream_id=10`, `IMU6_INT16_V1`, `stream_id=13`, `ORIENTATION_MOTION_INT16_V1`, `stream_id=30`, `HTS221_TEMP_HUMIDITY_INT16_V1`, `stream_id=20`, `LPS22HB_PRESSURE_INT32_V1`, `stream_id=12`, `MAG3_INT16_V1`。
+4. stream_idとpayload format idの管理方法。現行は `stream_id=1`, `DUMMY_ACCEL3_INT16_V1`, `stream_id=10`, `IMU6_INT16_V1`, `stream_id=13`, `ORIENTATION_MOTION_INT16_V2`, `stream_id=30`, `HTS221_TEMP_HUMIDITY_INT16_V1`, `stream_id=20`, `LPS22HB_PRESSURE_INT32_V1`, `stream_id=12`, `MAG3_INT16_V1`。
 5. optional sensor未ready時の詳細診断方法。sensor別の最小診断はStatusに実装済みで、今後はI2C scan結果、address候補などをLog/Eventへ出すか検討する
-6. MTU拡張の扱い。現行v3 frameは最大34 bytesである。将来の大きなpayloadではATT MTU拡張を前提にする
+6. MTU拡張の扱い。現行v3 frameは最大40 bytesである。将来の大きなpayloadではATT MTU拡張を前提にする
 7. fragmentation/reassemblyを初期から入れるか
 8. Config v4を `SET_STREAM_ENABLE`、実センサrate変更、TLV、Config Request/Responseのどれへ拡張するか
 9. Status Notifyのpayload
@@ -741,7 +754,7 @@ codex/webgui-capability-driven
 7. LSM303AGR magnetometer 10 Hzを地磁気streamとして実装し、実機で `stream_id=12` の実データを確認済み。
 8. Configはstream単位の固定長binary v4を最小実装として導入済み。`stream_id=1` の `SET_STREAM_INTERVAL` をFirmware/PC/WebGUIへ実装し、実機で100 msから500 msへのinterval変更を確認済み。
 9. `stream_id=1` は `DUMMY_ACCEL3` / `DUMMY_ACCEL3_INT16_V1` へ整理済み。dummy batteryとA0 ADCはactive pathから外し、A0 ADCは必要になった時点で独立streamとして復活を検討する。
-10. LSM6DSL派生姿勢streamとして `stream_id=13` を追加し、naive/complementary/Mahonyのpitch/roll/zenith、Mahony yaw、合成加速度をFirmwareで計算してWebGUI/CSV/3D表示へ流す。GUIから相補フィルタalphaとMahony `K_p` / `K_i` をConfig v4で変更できる。
+10. LSM6DSL派生姿勢streamとして `stream_id=13` を追加し、naive/IIR/complementary/Mahonyのpitch/roll/zenith、Mahony yaw、合成加速度をFirmwareで計算してWebGUI/CSV/3D表示へ流す。GUIからIIR cutoff、相補フィルタalpha、Mahony `K_p` / `K_i` をConfig v4で変更できる。
 11. `docs/specs/current_implementation_spec.md` と `docs/design/` をDUMMY_ACCEL3現行仕様に合わせて更新済み。
 12. PC backendのprotocol層をtransport非依存に再整理する。
 13. Firmwareのprotocol encoder/decoderをtransportから分離する。
@@ -775,5 +788,6 @@ codex/webgui-capability-driven
 - 2026-06-21: `stream_id=1` を `DUMMY_ACCEL3_INT16_V1` へ整理し、dummy batteryとA0 ADCをactive pathから削除。PC自動テスト / Firmware build / flash / BLE smoke / negative smokeで確認済み。
 - 2026-06-23: WebGUIのinterval表示を全streamへ広げ、`DUMMY_ACCEL3` はEditable、実センサstreamはFixedとして表示するよう更新。PC自動テストで確認済み。
 - 2026-06-23: `codex/mahony-orientation-stream` でLSM6DSL派生姿勢stream `stream_id=13` をMahony拡張。Naive / 相補フィルタ / Mahony filterのpitch/roll/zenith、Mahony yaw、合成加速度をBLEに載せ、GUIで3方式同時表示・表示切替・filter parameter設定を実装。PC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smoke、実ブラウザ確認まで完了。
+- 2026-06-23: `codex/orientation-iir-filter` で `stream_id=13` を `ORIENTATION_MOTION_INT16_V2` へ更新し、IIR pitch/roll/zenith、IIR cutoff Config、Orientationエリア内filter設定、Raw live折りたたみを追加。PC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smokeまで完了。
 
 過去履歴内の `次作業` は当時のメモであり、現在の優先順位は `現在の残課題 / 次回作業キュー` を正とする。

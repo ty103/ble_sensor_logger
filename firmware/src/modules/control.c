@@ -124,6 +124,10 @@ static bool app_event_handler(const struct app_event_header *aeh)
 		case BSL_CONFIG_OP_SET_MAHONY_KI:
 			lsm6dsl_sensor_set_mahony_ki_milli(event->config.sample_interval_ms);
 			break;
+		case BSL_CONFIG_OP_SET_IIR_CUTOFF_MILLIHZ:
+			lsm6dsl_sensor_set_iir_cutoff_millihz(
+				event->config.sample_interval_ms);
+			break;
 		default:
 			status.last_error = BSL_ERROR_INVALID_CONFIG;
 			publish_status();

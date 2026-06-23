@@ -29,7 +29,7 @@ ConfigStreamPayloadV4 {
 }
 ```
 
-初期 `op` は `SET_STREAM_INTERVAL` を実装対象にする。2026-06-21時点の最小実装では、Firmwareで実際に変更可能な対象streamは `stream_id=1` の `DUMMY_ACCEL3` のみとし、他streamは固定rateとして扱う。`SET_STREAM_ENABLE` はv4 smoke後の次段候補に残す。
+初期 `op` は `SET_STREAM_INTERVAL` を実装対象にする。2026-06-21時点の最小実装では、Firmwareで実際に変更可能な対象streamは `stream_id=1` の `DUMMY_ACCEL3` のみとし、他streamは固定rateとして扱う。2026-06-23時点では同じ固定長v4 payloadで `stream_id=13` 向けのorientation filter設定 `SET_COMPLEMENTARY_ALPHA`、`SET_MAHONY_KP`、`SET_MAHONY_KI`、`SET_IIR_CUTOFF_MILLIHZ` も実装済みである。`SET_STREAM_ENABLE` はv4 smoke後の次段候補に残す。
 
 現行Characteristic UUIDは維持し、payload `version` でv3 device-wide Configとv4 stream-scoped Configを区別する。試作段階のため、v4実装時にPC backend/Firmwareを同時更新し、v3互換維持は必須にしない。
 

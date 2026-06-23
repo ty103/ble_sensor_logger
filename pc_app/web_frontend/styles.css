@@ -48,7 +48,7 @@ select, input {
 }
 
 main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 40px; }
-.connection-band, .control-band, .filter-band, .status-band {
+.connection-band, .control-band, .status-band {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -60,13 +60,27 @@ main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 4
 .control-band { justify-content: space-between; }
 .interval-control select { width: 170px; }
 .interval-control input { width: 110px; }
-.filter-band input { width: 92px; }
 
+.live-raw-section {
+  padding: 14px 0 20px;
+  border-bottom: 1px solid #d6dde2;
+}
+.live-raw-section summary {
+  width: max-content;
+  color: #202b33;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  user-select: none;
+}
+.live-raw-section:not([open]) {
+  padding-bottom: 14px;
+}
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(120px, 1fr));
   gap: 10px;
-  padding: 20px 0;
+  padding: 12px 0 0;
 }
 .metrics-grid article {
   border: 1px solid #ced7dc;
@@ -117,6 +131,29 @@ main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 4
   color: #26333d;
   font-size: 13px;
   font-weight: 650;
+}
+.orientation-filter-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid #ced7dc;
+  border-top: 0;
+  background: white;
+}
+.orientation-filter-controls label {
+  color: #26333d;
+  font-size: 13px;
+  font-weight: 650;
+}
+.orientation-filter-controls input {
+  width: 92px;
+}
+.orientation-filter-controls span {
+  margin-left: -4px;
+  color: #65737d;
+  font-size: 13px;
 }
 .orientation-layout {
   display: grid;
@@ -339,7 +376,8 @@ main { max-width: 1440px; margin: 0 auto; padding: 22px clamp(14px, 3vw, 34px) 4
 @media (max-width: 620px) {
   .app-header, .chart-toolbar, .orientation-toolbar { align-items: flex-start; flex-direction: column; }
   .metrics-grid { grid-template-columns: repeat(2, 1fr); }
-  .connection-band > *, .control-band > *, .filter-band > *, .command-group { width: 100%; }
+  .connection-band > *, .control-band > *, .orientation-filter-controls > *, .command-group { width: 100%; }
+  .orientation-filter-controls span { margin-left: 0; }
   .command-group button { flex: 1; }
   .status-band button { margin-left: 0; width: 100%; }
   .chart-controls { width: 100%; }

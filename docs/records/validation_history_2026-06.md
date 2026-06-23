@@ -5,6 +5,53 @@
 この資料は `docs/generic_sensor_monitor_design_handoff.md` から分離した実機確認・検証履歴である。
 handoff本体は現在の設計判断、残課題、次回作業キューを正本として扱い、過去の詳細ログは本資料を参照する。
 
+### 2026-06-23: Orientation IIR filter追加
+
+対象branch: `codex/orientation-iir-filter`
+
+目的:
+
+- LSM6DSL派生姿勢stream `stream_id=13` に、gyroを使わないIIR filter版のpitch/roll/zenithを追加する。
+- GUIのfilter parameter変更をOrientationエリアへ集約する。
+- 生データのLive表示を折りたたみ可能にする。
+
+実装内容:
+
+- Firmware:
+  - `ORIENTATION_MOTION_INT16_V2` を追加し、payloadを14ch / 28 bytesへ拡張した。
+  - naive pitch/roll/zenithを一次IIR filterへ入力し、`pitch_iir_cdeg`、`roll_iir_cdeg`、`zenith_iir_cdeg` として同じBLE orientation sampleへ載せる。
+  - Config v4 op `SET_IIR_CUTOFF_MILLIHZ` を追加し、cutoff frequencyを0.001-13.000 Hzの範囲で更新する。
+- PC backend/CUI/WebGUI:
+  - Python protocol parser/packer、Capability default、WebAPI field metadata、CUI表示、BLE smoke scriptを `ORIENTATION_MOTION_INT16_V2` に同期した。
+  - `/api/orientation-filter` は `iir_cutoff_hz` を受け取り、IIR cutoffもConfig characteristicへWriteする。
+  - WebGUIのOrientation viewにIIR cuboid/readout/toggleを追加し、filter parameter変更UIをOrientationエリアへ移動した。
+  - Raw liveの最新値カードを折りたたみ可能な領域へ移動した。
+- Docs:
+  - 現行仕様、system設計、Firmware設計、PC/WebApp設計、handoffをV2 payloadとIIR設定へ同期した。
+
+確認内容:
+
+- `cd pc_app && uv run --extra dev pytest`
+  - 成功。35 tests passed。
+- `node --check pc_app/web_frontend/app.js`
+  - 成功。
+- Firmware shield build:
+  - `west build -b nrf52840dk/nrf52840 firmware --build-dir build/orientation-iir --pristine --shield x_nucleo_iks01a2`
+  - 成功。`firmware/.env` が無い場合は `firmware/.env.template` をsourceした。
+- Firmware flash:
+  - `source firmware/.env.template && west flash --build-dir build/orientation-iir --dev-id 1050278440`
+  - 成功。`firmware/.env` は未配置だったため `.env.template` を使用した。pyenv側の `west` では `intelhex` 不足で失敗したため、toolchain側の `west` をPATH優先で使用した。
+- BLE smoke:
+  - `cd pc_app && uv run --extra dev python scripts/ble_e2e_smoke.py --first-window-s 3 --second-window-s 2`
+  - 成功。Capabilityは `streams=6`、`stream_id=13` / `ORIENTATION_MOTION_INT16_V2` / `channels=14` / `preferred_mtu=40`。
+  - `orientation_filter_config_last=op:SET_IIR_CUTOFF_MILLIHZ stream:13 value:2500` を確認した。
+  - `stream_id=13` は3秒windowで71 samples、2秒windowで49 samples。latest orientationにnaive/IIR/complementary/Mahonyの角度と `accel_norm_mg` が含まれることを確認した。
+
+未実施:
+
+- 実ブラウザでのWebGUI表示確認。
+- 次回はWebGUIで `s13_pitch_iir_cdeg` / `s13_roll_iir_cdeg` / `s13_zenith_iir_cdeg` のCSV列、4方式3D cuboid、Orientationエリア内filter設定、Raw live折りたたみを実機接続で確認する。
+
 
 ### 2026-06-21: Debug dummy stream整理
 

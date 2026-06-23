@@ -104,7 +104,7 @@ BLE interfaceの詳細なpayload仕様は `../specs/current_implementation_spec.
 
 | Interface | 方向 | Transport操作 | Payload |
 | --- | --- | --- | --- |
-| Sensor Data | Device -> PC | GATT Notify | `SensorDataPayload v3`, 16-34 bytes |
+| Sensor Data | Device -> PC | GATT Notify | `SensorDataPayload v3`, 16-40 bytes |
 | Control | PC -> Device | GATT Write / Write Without Response | `ControlPayload`, 4 bytes |
 | Config | PC <-> Device | GATT Read / Write | `ConfigPayload v4`, 8 bytes |
 | Status | Device -> PC | GATT Read | `StatusPayload`, 16 bytes |
@@ -114,10 +114,10 @@ BLE interfaceの詳細なpayload仕様は `../specs/current_implementation_spec.
 - byte orderはLittle Endian。
 - 現行versionは3。
 - Sensor DataはNotification購読後に配信される。
-- Capabilityは起動時の実センサavailabilityを反映し、常時 `DUMMY_ACCEL3` を含む。LSM6DSLがreadyな場合は `stream_id=10`、HTS221がreadyな場合は `stream_id=30`、LPS22HBがreadyな場合は `stream_id=20`、LSM303AGR magnetometerがreadyな場合は `stream_id=12` を追加し、現行の最大 `stream_count` は5である。
+- Capabilityは起動時の実センサavailabilityを反映し、常時 `DUMMY_ACCEL3` を含む。LSM6DSLがreadyな場合は `stream_id=10` と `stream_id=13`、HTS221がreadyな場合は `stream_id=30`、LPS22HBがreadyな場合は `stream_id=20`、LSM303AGR magnetometerがreadyな場合は `stream_id=12` を追加し、現行の最大 `stream_count` は6である。
 - Capability schema v1はFirmwareが返すstream descriptorまでを正とする。WebGUI/CSV向けのfield metadataはPC backendが `payload_format` から補完し、Firmware payloadへfield descriptorを入れる場合はschema v2またはTLV化として別途設計する。
 - StatusはReadのみで、Notifyは未実装。optional sensor availabilityは `lsm6dsl_error`、`hts221_error`、`lps22hb_error`、`lsm303agr_magn_error` で同時に読める。
-- 現行Config v4は同じCharacteristic UUIDのままstream単位Configへ拡張した最小実装である。初期opは `SET_STREAM_INTERVAL` で、Firmwareで変更可能な対象は `stream_id=1` の `DUMMY_ACCEL3` に限定する。
+- 現行Config v4は同じCharacteristic UUIDのままstream単位Configへ拡張した最小実装である。`SET_STREAM_INTERVAL` は `stream_id=1` の `DUMMY_ACCEL3` に限定し、`stream_id=13` では `SET_COMPLEMENTARY_ALPHA`、`SET_MAHONY_KP`、`SET_MAHONY_KI`、`SET_IIR_CUTOFF_MILLIHZ` をorientation filter設定として扱う。
 - Config Writeは値検証に失敗するとATT errorを返す。
 
 ### 4.2 PC backend HTTP interface

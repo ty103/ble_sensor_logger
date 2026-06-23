@@ -33,11 +33,11 @@ def test_payload_sizes_match_spec():
     assert SENSOR_DATA_HEADER_SIZE == 12
     assert SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE == 6
     assert SENSOR_IMU6_SAMPLE_SIZE == 12
-    assert SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE == 22
+    assert SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE == 28
     assert SENSOR_MAG3_SAMPLE_SIZE == 6
     assert SENSOR_HTS221_SAMPLE_SIZE == 4
     assert SENSOR_LPS22HB_SAMPLE_SIZE == 4
-    assert SENSOR_DATA_SIZE == 34
+    assert SENSOR_DATA_SIZE == 40
     assert CONTROL_SIZE == 4
     assert CONFIG_SIZE == 8
     assert STATUS_SIZE == 16
@@ -159,7 +159,7 @@ def test_orientation_motion_sensor_data_round_trip():
         flags=0,
         sequence=6,
         timestamp_ms=792,
-        payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+        payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V2,
         payload_len=SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
         accel_x_mg=0,
         accel_y_mg=0,
@@ -167,6 +167,9 @@ def test_orientation_motion_sensor_data_round_trip():
         pitch_naive_cdeg=-1234,
         roll_naive_cdeg=567,
         zenith_naive_cdeg=9012,
+        pitch_iir_cdeg=-1220,
+        roll_iir_cdeg=590,
+        zenith_iir_cdeg=9005,
         pitch_complementary_cdeg=-1200,
         roll_complementary_cdeg=600,
         zenith_complementary_cdeg=9000,
@@ -240,10 +243,19 @@ def test_config_v4_orientation_filter_params_round_trip():
         sample_interval_ms=10,
         reserved=0,
     )
+    cutoff = ConfigPayload(
+        version=4,
+        op=ConfigOp.SET_IIR_CUTOFF_MILLIHZ,
+        stream_id=13,
+        flags=0,
+        sample_interval_ms=2000,
+        reserved=0,
+    )
 
     assert ConfigPayload.unpack(alpha.pack()) == alpha
     assert ConfigPayload.unpack(kp.pack()) == kp
     assert ConfigPayload.unpack(ki.pack()) == ki
+    assert ConfigPayload.unpack(cutoff.pack()) == cutoff
 
 
 def test_status_round_trip():
@@ -332,8 +344,8 @@ def test_capability_round_trip():
     assert parsed.streams[1].payload_format.name == "IMU6_INT16_V1"
     assert parsed.streams[2].stream_id == 13
     assert parsed.streams[2].stream_type.name == "ORIENTATION_MOTION"
-    assert parsed.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
-    assert parsed.streams[2].channel_count == 11
+    assert parsed.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V2"
+    assert parsed.streams[2].channel_count == 14
     assert parsed.streams[3].stream_id == 30
     assert parsed.streams[3].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
     assert parsed.streams[4].stream_id == 20

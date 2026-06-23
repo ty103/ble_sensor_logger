@@ -108,6 +108,7 @@ class SensorLoggerApp:
         complementary_alpha: float,
         mahony_kp: float,
         mahony_ki: float,
+        iir_cutoff_hz: float,
     ) -> None:
         await self._write_orientation_filter_config(
             ConfigOp.SET_COMPLEMENTARY_ALPHA,
@@ -115,6 +116,10 @@ class SensorLoggerApp:
         )
         await self._write_orientation_filter_config(ConfigOp.SET_MAHONY_KP, round(mahony_kp * 1000))
         await self._write_orientation_filter_config(ConfigOp.SET_MAHONY_KI, round(mahony_ki * 1000))
+        await self._write_orientation_filter_config(
+            ConfigOp.SET_IIR_CUTOFF_MILLIHZ,
+            round(iir_cutoff_hz * 1000),
+        )
 
     async def _write_orientation_filter_config(self, op: ConfigOp, value_milli: int) -> None:
         payload = ConfigPayload(

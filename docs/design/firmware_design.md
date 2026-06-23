@@ -223,13 +223,13 @@ Commandごとの処理:
 
 ## 9. Config処理
 
-現行Config v4 Writeは `ble_service` のcallbackでpayload長、version、op、stream_id、flags、interval範囲、reservedを検証する。検証成功後、`config_update_event` を発行する。
+現行Config v4 Writeは `ble_service` のcallbackでpayload長、version、op、stream_id、flags、op-specific value範囲、reservedを検証する。検証成功後、`config_update_event` を発行する。`SET_STREAM_INTERVAL` は `stream_id=1` のDUMMY_ACCEL3 interval、orientation filter opは `stream_id=13` のComplementary alpha、Mahony gain、IIR cutoff frequencyを更新する。
 
 `control` は `config_update_event` を受けると以下を行う。
 
-- `status.sample_interval_ms` を更新する。
+- `SET_STREAM_INTERVAL` では `status.sample_interval_ms` を更新する。
 - sensor別error fieldと代表 `last_error` にoptional sensor診断を反映する。
-- `sensor_dummy_set_interval()` を呼ぶ。
+- opに応じて `sensor_dummy_set_interval()`、`lsm6dsl_sensor_set_complementary_alpha_permille()`、`lsm6dsl_sensor_set_mahony_kp_milli()`、`lsm6dsl_sensor_set_mahony_ki_milli()`、`lsm6dsl_sensor_set_iir_cutoff_millihz()` を呼ぶ。
 - `ble_service_set_config()` を呼ぶ。
 - `status_update_event` を発行する。
 
