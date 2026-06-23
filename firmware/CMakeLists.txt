@@ -31,3 +31,5 @@ target_include_directories(app PRIVATE
   src/platform
   src/protocol
 )
+
+target_link_libraries(app PRIVATE m)

@@ -9,6 +9,9 @@ _Static_assert(sizeof(struct bsl_dummy_accel3_sample) == BSL_SENSOR_DUMMY_ACCEL3
 	       "unexpected dummy accel3 sample payload size");
 _Static_assert(sizeof(struct bsl_imu6_sample) == BSL_SENSOR_IMU6_SAMPLE_SIZE,
 	       "unexpected IMU6 sample payload size");
+_Static_assert(sizeof(struct bsl_orientation_motion_sample) ==
+		       BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
+	       "unexpected orientation motion sample payload size");
 _Static_assert(sizeof(struct bsl_mag3_sample) == BSL_SENSOR_MAG3_SAMPLE_SIZE,
 	       "unexpected MAG3 sample payload size");
 _Static_assert(sizeof(struct bsl_hts221_sample) == BSL_SENSOR_HTS221_SAMPLE_SIZE,
@@ -55,6 +58,12 @@ int bsl_sensor_data_pack(const struct bsl_sensor_data *payload, uint8_t *buf, si
 	} else if (payload->header.stream_id == BSL_STREAM_ID_LSM6DSL_IMU6) {
 		if (payload->header.payload_format != BSL_PAYLOAD_FORMAT_IMU6_INT16_V1 ||
 		    payload->header.payload_len != BSL_SENSOR_IMU6_SAMPLE_SIZE) {
+			return -EPROTO;
+		}
+	} else if (payload->header.stream_id == BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION) {
+		if (payload->header.payload_format !=
+			    BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1 ||
+		    payload->header.payload_len != BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE) {
 			return -EPROTO;
 		}
 	} else if (payload->header.stream_id == BSL_STREAM_ID_LSM303AGR_MAG3) {
@@ -255,40 +264,53 @@ void bsl_capability_default(struct bsl_capability *payload)
 	payload->streams[1].max_interval_ms = BSL_LSM6DSL_INTERVAL_MS;
 	payload->streams[1].scale_exponent = 0;
 
-	payload->streams[2].stream_id = BSL_STREAM_ID_HTS221_TEMP_HUMIDITY;
-	payload->streams[2].stream_type = BSL_STREAM_TYPE_TEMP_HUMIDITY;
-	payload->streams[2].channel_count = 2;
+	payload->streams[2].stream_id = BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION;
+	payload->streams[2].stream_type = BSL_STREAM_TYPE_ORIENTATION_MOTION;
+	payload->streams[2].channel_count = 7;
 	payload->streams[2].data_type = BSL_STREAM_DATA_TYPE_INT16;
 	payload->streams[2].unit = BSL_STREAM_UNIT_MIXED;
-	payload->streams[2].payload_format = BSL_PAYLOAD_FORMAT_HTS221_TEMP_HUMIDITY_INT16_V1;
+	payload->streams[2].payload_format = BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1;
 	payload->streams[2].stream_flags = BSL_STREAM_FLAG_ENABLED_BY_DEFAULT |
 					   BSL_STREAM_FLAG_MIXED_UNITS;
-	payload->streams[2].default_interval_ms = BSL_HTS221_INTERVAL_MS;
-	payload->streams[2].min_interval_ms = BSL_HTS221_INTERVAL_MS;
-	payload->streams[2].max_interval_ms = BSL_HTS221_INTERVAL_MS;
+	payload->streams[2].default_interval_ms = BSL_LSM6DSL_INTERVAL_MS;
+	payload->streams[2].min_interval_ms = BSL_LSM6DSL_INTERVAL_MS;
+	payload->streams[2].max_interval_ms = BSL_LSM6DSL_INTERVAL_MS;
 	payload->streams[2].scale_exponent = -2;
 
-	payload->streams[3].stream_id = BSL_STREAM_ID_LPS22HB_PRESSURE;
-	payload->streams[3].stream_type = BSL_STREAM_TYPE_PRESSURE;
-	payload->streams[3].channel_count = 1;
-	payload->streams[3].data_type = BSL_STREAM_DATA_TYPE_INT32;
-	payload->streams[3].unit = BSL_STREAM_UNIT_PA;
-	payload->streams[3].payload_format = BSL_PAYLOAD_FORMAT_LPS22HB_PRESSURE_INT32_V1;
-	payload->streams[3].stream_flags = BSL_STREAM_FLAG_ENABLED_BY_DEFAULT;
-	payload->streams[3].default_interval_ms = BSL_LPS22HB_INTERVAL_MS;
-	payload->streams[3].min_interval_ms = BSL_LPS22HB_INTERVAL_MS;
-	payload->streams[3].max_interval_ms = BSL_LPS22HB_INTERVAL_MS;
-	payload->streams[3].scale_exponent = 0;
+	payload->streams[3].stream_id = BSL_STREAM_ID_HTS221_TEMP_HUMIDITY;
+	payload->streams[3].stream_type = BSL_STREAM_TYPE_TEMP_HUMIDITY;
+	payload->streams[3].channel_count = 2;
+	payload->streams[3].data_type = BSL_STREAM_DATA_TYPE_INT16;
+	payload->streams[3].unit = BSL_STREAM_UNIT_MIXED;
+	payload->streams[3].payload_format = BSL_PAYLOAD_FORMAT_HTS221_TEMP_HUMIDITY_INT16_V1;
+	payload->streams[3].stream_flags = BSL_STREAM_FLAG_ENABLED_BY_DEFAULT |
+					   BSL_STREAM_FLAG_MIXED_UNITS;
+	payload->streams[3].default_interval_ms = BSL_HTS221_INTERVAL_MS;
+	payload->streams[3].min_interval_ms = BSL_HTS221_INTERVAL_MS;
+	payload->streams[3].max_interval_ms = BSL_HTS221_INTERVAL_MS;
+	payload->streams[3].scale_exponent = -2;
 
-	payload->streams[4].stream_id = BSL_STREAM_ID_LSM303AGR_MAG3;
-	payload->streams[4].stream_type = BSL_STREAM_TYPE_MAG3;
-	payload->streams[4].channel_count = 3;
-	payload->streams[4].data_type = BSL_STREAM_DATA_TYPE_INT16;
-	payload->streams[4].unit = BSL_STREAM_UNIT_UT;
-	payload->streams[4].payload_format = BSL_PAYLOAD_FORMAT_MAG3_INT16_V1;
+	payload->streams[4].stream_id = BSL_STREAM_ID_LPS22HB_PRESSURE;
+	payload->streams[4].stream_type = BSL_STREAM_TYPE_PRESSURE;
+	payload->streams[4].channel_count = 1;
+	payload->streams[4].data_type = BSL_STREAM_DATA_TYPE_INT32;
+	payload->streams[4].unit = BSL_STREAM_UNIT_PA;
+	payload->streams[4].payload_format = BSL_PAYLOAD_FORMAT_LPS22HB_PRESSURE_INT32_V1;
 	payload->streams[4].stream_flags = BSL_STREAM_FLAG_ENABLED_BY_DEFAULT;
-	payload->streams[4].default_interval_ms = BSL_LSM303AGR_MAG3_INTERVAL_MS;
-	payload->streams[4].min_interval_ms = BSL_LSM303AGR_MAG3_INTERVAL_MS;
-	payload->streams[4].max_interval_ms = BSL_LSM303AGR_MAG3_INTERVAL_MS;
+	payload->streams[4].default_interval_ms = BSL_LPS22HB_INTERVAL_MS;
+	payload->streams[4].min_interval_ms = BSL_LPS22HB_INTERVAL_MS;
+	payload->streams[4].max_interval_ms = BSL_LPS22HB_INTERVAL_MS;
 	payload->streams[4].scale_exponent = 0;
+
+	payload->streams[5].stream_id = BSL_STREAM_ID_LSM303AGR_MAG3;
+	payload->streams[5].stream_type = BSL_STREAM_TYPE_MAG3;
+	payload->streams[5].channel_count = 3;
+	payload->streams[5].data_type = BSL_STREAM_DATA_TYPE_INT16;
+	payload->streams[5].unit = BSL_STREAM_UNIT_UT;
+	payload->streams[5].payload_format = BSL_PAYLOAD_FORMAT_MAG3_INT16_V1;
+	payload->streams[5].stream_flags = BSL_STREAM_FLAG_ENABLED_BY_DEFAULT;
+	payload->streams[5].default_interval_ms = BSL_LSM303AGR_MAG3_INTERVAL_MS;
+	payload->streams[5].min_interval_ms = BSL_LSM303AGR_MAG3_INTERVAL_MS;
+	payload->streams[5].max_interval_ms = BSL_LSM303AGR_MAG3_INTERVAL_MS;
+	payload->streams[5].scale_exponent = 0;
 }

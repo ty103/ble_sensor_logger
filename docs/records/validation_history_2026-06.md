@@ -852,6 +852,40 @@ CONFIG_I2C_LOG_LEVEL_DBG=y
 1. LSM303AGR accel `stream_id=11` は比較用途、低電力構成、またはLSM6DSLを使わない構成の必要性が出た時点で判断する。
 2. optional sensorの詳細診断が必要なら、Status fieldを増やすよりLog/Event channelでI2C scan結果やaddress候補を扱う。
 
+### 2026-06-23: stream_id=13 Firmware task build確認
+
+対象branch: `codex/stream13-firmware`
+
+目的:
+
+- LSM6DSL派生姿勢stream `stream_id=13` のFirmware実装が、既存PC自動テストとFirmware shield buildを壊さないことを確認する。
+
+実装内容:
+
+- `firmware/src/protocol/protocol.h` / `protocol.c` に `ORIENTATION_MOTION` stream type、`ORIENTATION_MOTION_INT16_V1` payload format、14 bytes payload、`BSL_CAPABILITY_MAX_STREAMS=6` を追加した。
+- `firmware/src/modules/lsm6dsl_sensor.c` で、LSM6DSLの同一fetch結果からIMU6 sampleとorientation sampleを生成するようにした。2 streamは同じtimestamp/sequenceで送出し、measurement startとsequence resetでfiltered姿勢状態もresetする。
+- `CONFIG_BSL_ORIENTATION_FRONT_AXIS` と `CONFIG_BSL_ORIENTATION_GRAVITY_AXIS` を追加し、`+X/-X/+Y/-Y/+Z/-Z` のstring指定をinit時に検証するようにした。
+- CapabilityはLSM6DSL ready時だけ `stream_id=10` と `stream_id=13` を一緒に含め、HTS221/LPS22HB/LSM303AGR magnetometerは従来どおりreadyなものだけ詰める。
+
+確認内容:
+
+- `pc_app/` で `uv run --extra dev pytest`
+  - `30 passed`
+- Firmware shield build:
+  - `west build -b nrf52840dk/nrf52840 firmware --build-dir build/firmware-stream13 --pristine --shield x_nucleo_iks01a2`
+  - 成功。FLASH使用量 `209100 B`、RAM使用量 `37400 B`。
+- `firmware/.env` はこのworktreeに未配置だったため、NCS v3.2.2 / toolchain `e5f4758bcf` の環境変数をshell内で明示して実行した。
+
+未確認:
+
+- PC backendはまだ `ORIENTATION_MOTION_INT16_V1` をparseしないため、このFirmware branch単体ではflash / BLE smoke / WebGUI確認は未実施。
+
+次作業:
+
+1. PC backend taskで `stream_id=13` のparser、field metadata、BLE smoke script、pytestを追加する。
+2. 統合branchでFirmwareをflashし、Capability Readで `streams=6` と `stream_id=13` を確認する。
+3. BLE smokeで `stream_id=10` と `stream_id=13` が同じ測定中に流れることを確認する。
+
 ### 2026-06-20: WebGUI複数グラフ化
 
 対象branch: `codex/gui-rich-graphs`

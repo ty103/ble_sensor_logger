@@ -266,15 +266,16 @@ int ble_service_init(void)
 	bsl_capability_default(&current_capability);
 	if (lsm6dsl_sensor_is_available()) {
 		stream_count++;
+		stream_count++;
 	}
 	if (hts221_sensor_is_available()) {
-		current_capability.streams[stream_count++] = current_capability.streams[2];
-	}
-	if (lps22hb_sensor_is_available()) {
 		current_capability.streams[stream_count++] = current_capability.streams[3];
 	}
-	if (lsm303agr_magn_sensor_is_available()) {
+	if (lps22hb_sensor_is_available()) {
 		current_capability.streams[stream_count++] = current_capability.streams[4];
+	}
+	if (lsm303agr_magn_sensor_is_available()) {
+		current_capability.streams[stream_count++] = current_capability.streams[5];
 	}
 	current_capability.header.stream_count = stream_count;
 	k_work_init_delayable(&advertising_work, advertising_work_handler);
