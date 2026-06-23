@@ -74,6 +74,19 @@
         <input id="mahonyKiInput" type="number" min="0" max="10" step="0.001" value="0">
         <button id="applyFilterButton" class="secondary" disabled>Apply filters</button>
       </div>
+      <div class="orientation-filter-controls" aria-label="Gyro auto-calibration settings">
+        <label for="gyroCalibThresholdInput">Still threshold</label>
+        <input id="gyroCalibThresholdInput" type="number" min="10" max="1000" step="1" value="50">
+        <span>mdps</span>
+        <label for="gyroCalibAlphaInput">Bias alpha</label>
+        <input id="gyroCalibAlphaInput" type="number" min="0" max="1000" step="1" value="5">
+        <span>permille</span>
+        <label for="gyroCalibWindowInput">Still window</label>
+        <input id="gyroCalibWindowInput" type="number" min="5" max="260" step="1" value="26">
+        <span>samples</span>
+        <button id="applyGyroCalibButton" class="secondary" disabled>Apply auto-calib config</button>
+        <button id="forceGyroCalibButton" class="secondary" disabled>Force Calib</button>
+      </div>
       <div class="orientation-layout">
         <canvas id="orientationCanvas" aria-label="3D orientation cuboid"></canvas>
         <div class="orientation-readout">

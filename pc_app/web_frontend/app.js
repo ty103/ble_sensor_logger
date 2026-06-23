@@ -18,6 +18,11 @@ const elements = {
   mahonyKiInput: $("mahonyKiInput"),
   iirCutoffInput: $("iirCutoffInput"),
   applyFilterButton: $("applyFilterButton"),
+  gyroCalibThresholdInput: $("gyroCalibThresholdInput"),
+  gyroCalibAlphaInput: $("gyroCalibAlphaInput"),
+  gyroCalibWindowInput: $("gyroCalibWindowInput"),
+  applyGyroCalibButton: $("applyGyroCalibButton"),
+  forceGyroCalibButton: $("forceGyroCalibButton"),
   refreshStatusButton: $("refreshStatusButton"),
   metricsGrid: $("metricsGrid"),
   clearButton: $("clearButton"),
@@ -392,6 +397,8 @@ function updateConnection(value, pending = false) {
   elements.streamSelect.disabled = !value || pending || elements.streamSelect.options.length === 0;
   elements.applyIntervalButton.disabled = !value || pending || elements.streamSelect.options.length === 0;
   elements.applyFilterButton.disabled = !value || pending || !hasOrientationCapability();
+  elements.applyGyroCalibButton.disabled = !value || pending || !hasImu6Capability();
+  elements.forceGyroCalibButton.disabled = !value || pending || !hasImu6Capability();
   elements.refreshStatusButton.disabled = !value || pending;
 }
 
@@ -487,6 +494,8 @@ function renderCapability(capability, fromDevice) {
   renderStreamControls();
   renderGraphSignalControls();
   elements.applyFilterButton.disabled = !connected || !hasOrientationCapability();
+  elements.applyGyroCalibButton.disabled = !connected || !hasImu6Capability();
+  elements.forceGyroCalibButton.disabled = !connected || !hasImu6Capability();
   updateOrientationView();
   drawCharts();
 }
@@ -659,6 +668,10 @@ function updateMetric(definition, sample) {
 
 function hasOrientationCapability() {
   return fieldDefinitions.some((definition) => definition.streamId === 13);
+}
+
+function hasImu6Capability() {
+  return fieldDefinitions.some((definition) => definition.streamId === 10);
 }
 
 function setupOrientationScene() {
@@ -918,6 +931,24 @@ async function applyOrientationFilters() {
   elements.iirCutoffInput.value = body.iir_cutoff_hz;
   await commandAndRefresh("/api/orientation-filter", body);
   showToast("Orientation filters applied");
+}
+
+async function applyGyroCalibConfig() {
+  const body = {
+    threshold_mdps: boundedNumber(elements.gyroCalibThresholdInput, 50),
+    alpha_permille: boundedNumber(elements.gyroCalibAlphaInput, 5),
+    window_samples: boundedNumber(elements.gyroCalibWindowInput, 26),
+  };
+  elements.gyroCalibThresholdInput.value = body.threshold_mdps;
+  elements.gyroCalibAlphaInput.value = body.alpha_permille;
+  elements.gyroCalibWindowInput.value = body.window_samples;
+  await commandAndRefresh("/api/gyro-calib-config", body);
+  showToast("Gyro auto-calib config applied");
+}
+
+async function forceGyroCalib() {
+  await commandAndRefresh("/api/force-gyro-calib");
+  showToast("Gyro force calibration applied");
 }
 
 function connectSocket() {
@@ -1216,6 +1247,8 @@ elements.applyIntervalButton.addEventListener("click", () =>
   })
 );
 elements.applyFilterButton.addEventListener("click", applyOrientationFilters);
+elements.applyGyroCalibButton.addEventListener("click", applyGyroCalibConfig);
+elements.forceGyroCalibButton.addEventListener("click", forceGyroCalib);
 elements.refreshStatusButton.addEventListener("click", refreshStatus);
 elements.clearButton.addEventListener("click", () => {
   history.length = 0;

@@ -475,3 +475,78 @@ def test_web_sample_json_marks_fields_outside_payload_as_null():
     assert orientation["accel_z_mg"] is None
     assert orientation["mag_z_ut"] is None
     assert orientation["pressure_pa"] is None
+
+
+def test_web_app_exposes_gyro_calib_routes():
+    app = create_web_app()
+    routes = {(route.method, route.resource.canonical) for route in app.router.routes()}
+
+    assert ("POST", "/api/gyro-calib-config") in routes
+    assert ("POST", "/api/force-gyro-calib") in routes
+
+
+def test_set_gyro_calib_config_posts_params():
+    class CalibApp(SlowConnectApp):
+        def __init__(self):
+            super().__init__()
+            self.calib_calls = []
+
+        async def set_gyro_calib_params(self, threshold_mdps, alpha_permille, window_samples):
+            self.calib_calls.append((threshold_mdps, alpha_permille, window_samples))
+
+    async def run():
+        app = CalibApp()
+        backend = WebBackend(app)
+
+        response = await backend.set_gyro_calib_config(
+            JsonRequest({"threshold_mdps": 80, "alpha_permille": 10, "window_samples": 52})
+        )
+
+        assert response.status == 200
+        assert app.calib_calls == [(80, 10, 52)]
+        body = json.loads(response.text)
+        assert body == {
+            "ok": True,
+            "threshold_mdps": 80,
+            "alpha_permille": 10,
+            "window_samples": 52,
+        }
+
+    asyncio.run(run())
+
+
+def test_force_gyro_calib_calls_app_method():
+    class ForceCalibApp(SlowConnectApp):
+        def __init__(self):
+            super().__init__()
+            self.force_calib_called = False
+
+        async def force_gyro_calib(self):
+            self.force_calib_called = True
+
+    async def run():
+        app = ForceCalibApp()
+        backend = WebBackend(app)
+
+        response = await backend.force_gyro_calib(JsonRequest({}))
+
+        assert response.status == 200
+        assert app.force_calib_called
+        body = json.loads(response.text)
+        assert body == {"ok": True}
+
+    asyncio.run(run())
+
+
+def test_web_frontend_has_gyro_calib_controls():
+    web_root = Path(__file__).resolve().parents[1] / "web_frontend"
+    index_html = (web_root / "index.html").read_text()
+    app_js = (web_root / "app.js").read_text()
+
+    assert 'id="gyroCalibThresholdInput"' in index_html
+    assert 'id="gyroCalibAlphaInput"' in index_html
+    assert 'id="gyroCalibWindowInput"' in index_html
+    assert 'id="applyGyroCalibButton"' in index_html
+    assert 'id="forceGyroCalibButton"' in index_html
+    assert 'commandAndRefresh("/api/gyro-calib-config", body)' in app_js
+    assert 'commandAndRefresh("/api/force-gyro-calib")' in app_js

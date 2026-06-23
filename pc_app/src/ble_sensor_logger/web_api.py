@@ -408,6 +408,27 @@ class WebBackend:
             }
         )
 
+    async def set_gyro_calib_config(self, request: web.Request) -> web.Response:
+        body = await request.json()
+        threshold_mdps = int(body["threshold_mdps"])
+        alpha_permille = int(body["alpha_permille"])
+        window_samples = int(body["window_samples"])
+        await self.sensor_app.set_gyro_calib_params(threshold_mdps, alpha_permille, window_samples)
+        await self.broadcast_state()
+        return web.json_response(
+            {
+                "ok": True,
+                "threshold_mdps": threshold_mdps,
+                "alpha_permille": alpha_permille,
+                "window_samples": window_samples,
+            }
+        )
+
+    async def force_gyro_calib(self, _request: web.Request) -> web.Response:
+        await self.sensor_app.force_gyro_calib()
+        await self.broadcast_state()
+        return web.json_response({"ok": True})
+
     async def status(self, _request: web.Request) -> web.Response:
         status = None
         if self.sensor_app.state.connected:
@@ -573,6 +594,8 @@ def create_web_app(sensor_app: SensorLoggerApp | None = None) -> web.Application
     app.router.add_post("/api/reset-sequence", backend.reset_sequence)
     app.router.add_post("/api/interval", backend.set_interval)
     app.router.add_post("/api/orientation-filter", backend.set_orientation_filter)
+    app.router.add_post("/api/gyro-calib-config", backend.set_gyro_calib_config)
+    app.router.add_post("/api/force-gyro-calib", backend.force_gyro_calib)
     app.router.add_get("/api/status", backend.status)
     app.router.add_get("/api/capability", backend.capability)
     app.router.add_get("/ws", backend.websocket)

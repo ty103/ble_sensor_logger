@@ -40,6 +40,14 @@ static double complementary_roll_deg;
 static double mahony_integral[3];
 static double mahony_q[4] = {1.0, 0.0, 0.0, 0.0};
 
+/* Gyro auto-calibration state */
+static double gyro_bias[3];
+static uint32_t gyro_still_counter;
+static bool gyro_force_calib_requested;
+static uint16_t calib_threshold_mdps = CONFIG_BSL_GYRO_CALIB_THRESHOLD_MDPS;
+static uint16_t calib_alpha_permille = CONFIG_BSL_GYRO_CALIB_ALPHA_PERMILLE;
+static uint16_t calib_window_samples = CONFIG_BSL_GYRO_CALIB_WINDOW_SAMPLES;
+
 #if DT_HAS_COMPAT_STATUS_OKAY(st_lsm6dsl)
 static const struct device *const lsm6dsl = DEVICE_DT_GET_ONE(st_lsm6dsl);
 
@@ -323,6 +331,11 @@ static void reset_orientation_filters(void)
 	mahony_q[1] = 0.0;
 	mahony_q[2] = 0.0;
 	mahony_q[3] = 0.0;
+	gyro_bias[0] = 0.0;
+	gyro_bias[1] = 0.0;
+	gyro_bias[2] = 0.0;
+	gyro_still_counter = 0;
+	gyro_force_calib_requested = false;
 }
 
 static void fill_header(struct bsl_sensor_data *sample, uint8_t stream_id,
@@ -454,6 +467,50 @@ static void fill_orientation_sample(struct bsl_sensor_data *sample,
 	sample->payload.orientation_motion.accel_norm_mg = double_to_i16(accel_norm);
 }
 
+/* Apply current bias to gyro_mdps[] in-place. */
+static void apply_gyro_calib(int16_t gyro_mdps[3])
+{
+	for (size_t i = 0; i < 3; i++) {
+		gyro_mdps[i] = clamp_i16((int64_t)gyro_mdps[i] - (int64_t)llround(gyro_bias[i]));
+	}
+}
+
+/*
+ * Update bias estimate.
+ * raw_mdps:        raw (uncalibrated) gyro reading
+ * calibrated_mdps: output after applying existing bias (for stillness check)
+ */
+static void update_gyro_calib(const int16_t raw_mdps[3], const int16_t calibrated_mdps[3])
+{
+	bool is_still = (abs(calibrated_mdps[0]) <= (int16_t)calib_threshold_mdps) &&
+			(abs(calibrated_mdps[1]) <= (int16_t)calib_threshold_mdps) &&
+			(abs(calibrated_mdps[2]) <= (int16_t)calib_threshold_mdps);
+
+	if (is_still) {
+		if (gyro_still_counter < UINT32_MAX) {
+			gyro_still_counter++;
+		}
+	} else {
+		gyro_still_counter = 0;
+	}
+
+	if (gyro_force_calib_requested) {
+		for (size_t i = 0; i < 3; i++) {
+			gyro_bias[i] = (double)raw_mdps[i];
+		}
+		gyro_still_counter = 0;
+		gyro_force_calib_requested = false;
+		LOG_INF("gyro force calib: bias=[%.1f %.1f %.1f] mdps",
+			gyro_bias[0], gyro_bias[1], gyro_bias[2]);
+	} else if (gyro_still_counter >= (uint32_t)calib_window_samples) {
+		double alpha = (double)calib_alpha_permille / 1000.0;
+
+		for (size_t i = 0; i < 3; i++) {
+			gyro_bias[i] += alpha * ((double)raw_mdps[i] - gyro_bias[i]);
+		}
+	}
+}
+
 static void convert_sensor_values(const struct sensor_value accel[3],
 				  const struct sensor_value gyro[3],
 				  int16_t accel_mg[3],
@@ -526,6 +583,12 @@ static void sample_work_handler(struct k_work *work)
 	}
 
 	convert_sensor_values(accel, gyro, accel_mg, gyro_mdps);
+
+	int16_t gyro_raw[3] = {gyro_mdps[0], gyro_mdps[1], gyro_mdps[2]};
+
+	apply_gyro_calib(gyro_mdps);
+	update_gyro_calib(gyro_raw, gyro_mdps);
+
 	sample_sequence = sequence++;
 	timestamp_ms = platform_uptime_ms();
 
@@ -641,4 +704,24 @@ void lsm6dsl_sensor_set_mahony_ki_milli(uint16_t ki_milli)
 void lsm6dsl_sensor_set_iir_cutoff_millihz(uint16_t cutoff_millihz)
 {
 	iir_cutoff_hz = clamp_double((double)cutoff_millihz / 1000.0, 0.001, 13.0);
+}
+
+void lsm6dsl_sensor_force_gyro_calib(void)
+{
+	gyro_force_calib_requested = true;
+}
+
+void lsm6dsl_sensor_set_gyro_calib_threshold_mdps(uint16_t threshold_mdps)
+{
+	calib_threshold_mdps = threshold_mdps;
+}
+
+void lsm6dsl_sensor_set_gyro_calib_alpha_permille(uint16_t alpha_permille)
+{
+	calib_alpha_permille = alpha_permille;
+}
+
+void lsm6dsl_sensor_set_gyro_calib_window_samples(uint16_t window_samples)
+{
+	calib_window_samples = window_samples;
 }

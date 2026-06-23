@@ -64,6 +64,7 @@ class Command(IntEnum):
     STOP_MEASUREMENT = 0x02
     REQUEST_STATUS = 0x03
     RESET_SEQUENCE = 0x04
+    FORCE_GYRO_CALIB = 0x05
 
 
 class ConfigOp(IntEnum):
@@ -72,6 +73,9 @@ class ConfigOp(IntEnum):
     SET_MAHONY_KP = 0x03
     SET_MAHONY_KI = 0x04
     SET_IIR_CUTOFF_MILLIHZ = 0x05
+    SET_GYRO_CALIB_THRESHOLD = 0x06   # still threshold in mdps
+    SET_GYRO_CALIB_ALPHA = 0x07       # bias lerp rate in permille (0-1000)
+    SET_GYRO_CALIB_WINDOW = 0x08      # consecutive still samples required
 
 
 class DeviceState(IntEnum):
@@ -639,6 +643,13 @@ class ConfigPayload:
                     f"got {self.sample_interval_ms}"
                 )
             return
+        if self.op in (
+            ConfigOp.SET_GYRO_CALIB_THRESHOLD,
+            ConfigOp.SET_GYRO_CALIB_ALPHA,
+            ConfigOp.SET_GYRO_CALIB_WINDOW,
+        ):
+            self._validate_gyro_calib_config()
+            return
         if self.stream_id != STREAM_ID_LSM6DSL_ORIENTATION_MOTION:
             raise ProtocolError(f"unsupported stream id for filter config: {self.stream_id}")
         if self.op == ConfigOp.SET_COMPLEMENTARY_ALPHA:
@@ -652,6 +663,26 @@ class ConfigPayload:
         if self.op == ConfigOp.SET_IIR_CUTOFF_MILLIHZ:
             if self.sample_interval_ms < 1 or self.sample_interval_ms > 13_000:
                 raise ProtocolError("IIR cutoff must be 0.001-13.000 Hz")
+            return
+        raise ProtocolError(f"unsupported config op: {self.op}")
+
+    def _validate_gyro_calib_config(self) -> None:
+        if self.stream_id != STREAM_ID_LSM6DSL_IMU6:
+            raise ProtocolError(
+                f"gyro calib config requires stream_id={STREAM_ID_LSM6DSL_IMU6}, "
+                f"got {self.stream_id}"
+            )
+        if self.op == ConfigOp.SET_GYRO_CALIB_THRESHOLD:
+            if self.sample_interval_ms < 10 or self.sample_interval_ms > 1000:
+                raise ProtocolError("gyro calib threshold must be 10-1000 mdps")
+            return
+        if self.op == ConfigOp.SET_GYRO_CALIB_ALPHA:
+            if self.sample_interval_ms > 1000:
+                raise ProtocolError("gyro calib alpha must be 0-1000 permille")
+            return
+        if self.op == ConfigOp.SET_GYRO_CALIB_WINDOW:
+            if self.sample_interval_ms < 5 or self.sample_interval_ms > 260:
+                raise ProtocolError("gyro calib window must be 5-260 samples")
             return
         raise ProtocolError(f"unsupported config op: {self.op}")
 

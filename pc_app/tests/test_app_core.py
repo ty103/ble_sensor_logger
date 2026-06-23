@@ -340,3 +340,45 @@ def test_set_orientation_filter_params_writes_config_v4_payloads():
         assert [payload.sample_interval_ms for payload in payloads] == [975, 500, 10, 2500]
 
     asyncio.run(run())
+
+
+class FakeClientWithControl(FakeClient):
+    def __init__(self):
+        super().__init__()
+        self.control_writes = []
+
+    async def write_control(self, payload):
+        self.control_writes.append(payload)
+
+
+def test_force_gyro_calib_writes_control_command():
+    from ble_sensor_logger.protocol import Command, ControlPayload
+
+    async def run():
+        client = FakeClientWithControl()
+        app = SensorLoggerApp(client=client)
+        await app.force_gyro_calib()
+        assert len(client.control_writes) == 1
+        payload = ControlPayload.unpack(client.control_writes[0])
+        assert payload.command == Command.FORCE_GYRO_CALIB
+
+    asyncio.run(run())
+
+
+def test_set_gyro_calib_params_writes_config_v4_payloads():
+    async def run():
+        client = FakeClient()
+        app = SensorLoggerApp(client=client)
+        await app.set_gyro_calib_params(threshold_mdps=80, alpha_permille=10, window_samples=52)
+
+        assert len(client.config_writes) == 3
+        payloads = [ConfigPayload.unpack(payload) for payload in client.config_writes]
+        assert [payload.op for payload in payloads] == [
+            ConfigOp.SET_GYRO_CALIB_THRESHOLD,
+            ConfigOp.SET_GYRO_CALIB_ALPHA,
+            ConfigOp.SET_GYRO_CALIB_WINDOW,
+        ]
+        assert [payload.stream_id for payload in payloads] == [10, 10, 10]
+        assert [payload.sample_interval_ms for payload in payloads] == [80, 10, 52]
+
+    asyncio.run(run())
