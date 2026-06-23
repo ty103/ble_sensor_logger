@@ -259,7 +259,7 @@ Characteristic: Capability Read
 Python header struct format: `<BBHBBHHH`
 Python stream struct format: `<BBBBBBHHHHbB`
 
-CapabilityはGeneric Sensor Monitor化の最初の足場として追加したschema v1である。現時点では `DUMMY_ACCEL3_INT16_V1` を常時記述し、Firmware起動時にLSM6DSLがreadyになった場合のみ `IMU6_INT16_V1`、HTS221がreadyになった場合のみ `HTS221_TEMP_HUMIDITY_INT16_V1`、LPS22HBがreadyになった場合のみ `LPS22HB_PRESSURE_INT32_V1`、LSM303AGR magnetometerがreadyになった場合のみ `MAG3_INT16_V1` を追加streamとして記述する。
+CapabilityはGeneric Sensor Monitor化の最初の足場として追加したschema v1である。現時点では `DUMMY_ACCEL3_INT16_V1` を常時記述し、Firmware起動時にLSM6DSLがreadyになった場合のみ `IMU6_INT16_V1` と `ORIENTATION_MOTION_INT16_V1`、HTS221がreadyになった場合のみ `HTS221_TEMP_HUMIDITY_INT16_V1`、LPS22HBがreadyになった場合のみ `LPS22HB_PRESSURE_INT32_V1`、LSM303AGR magnetometerがreadyになった場合のみ `MAG3_INT16_V1` を追加streamとして記述する。
 
 Firmware Capability schema v1は、stream単位のmetadataまでを表す固定長binary schemaとする。WebGUI/CSVで使うfield単位のlabel、unit、scale、decimal表現は、PC backendが `payload_format` から補完して `/api/capability` の `streams[].fields[]` に付与する。Firmware由来のfield descriptorが必要になった場合は、schema v1へ後付けせず、Capability schema version 2またはTLV化として別途設計する。
 
@@ -270,18 +270,18 @@ Header:
 | 0 | 1 | uint8 | version | `3` |
 | 1 | 1 | uint8 | schema_version | `1` |
 | 2 | 2 | uint16 | capability_flags | bit0 custom GATT、bit1 fixed binary |
-| 4 | 1 | uint8 | stream_count | `1` から `5` |
+| 4 | 1 | uint8 | stream_count | `1` から `6` |
 | 5 | 1 | uint8 | reserved | `0` |
 | 6 | 2 | uint16 | supported_commands | command値をbit位置にしたbitmask |
 | 8 | 2 | uint16 | supported_features | bit0 interval config、bit1 status read、bit2 sensor notify |
-| 10 | 2 | uint16 | preferred_mtu | 現行ではSensor Data frame v3 max sizeの24 |
+| 10 | 2 | uint16 | preferred_mtu | 現行ではSensor Data frame v3 max sizeの26 |
 
 Stream descriptor共通形式:
 
 | Offset | Size | 型 | 名称 | 説明 |
 | ---: | ---: | --- | --- | --- |
 | 12 | 1 | uint8 | stream_id | stream識別子 |
-| 13 | 1 | uint8 | stream_type | `1` = DUMMY_ACCEL3、`2` = IMU6、`3` = TEMP_HUMIDITY、`4` = PRESSURE、`5` = MAG3 |
+| 13 | 1 | uint8 | stream_type | `1` = DUMMY_ACCEL3、`2` = IMU6、`3` = TEMP_HUMIDITY、`4` = PRESSURE、`5` = MAG3、`6` = ORIENTATION_MOTION |
 | 14 | 1 | uint8 | channel_count | stream内channel数 |
 | 15 | 1 | uint8 | data_type | `1` = INT16、`2` = INT32 |
 | 16 | 1 | uint8 | unit | `0` = MIXED、`1` = PA、`2` = UT、`3` = MG |

@@ -598,11 +598,11 @@ codex/webgui-capability-driven
 1. LSM6DSL派生姿勢stream `stream_id=13` をFirmware/PC/WebGUIへ追加する。
    - 実装前に、相補フィルタでLSM6DSL gyroを補助入力として使う方針でよいかを確認する。3軸加速度のみを厳密条件にする場合は、filtered pitch/rollの定義をLPF姿勢などへ変更する。
    - 並行開発前提の進め方:
-     - [ ] まずこのhandoffの `stream_id=13` interface lockを正とし、docs-onlyの準備commitを共通baseへ入れる。その後、Firmware / PC backend / WebGUIの各チャットは同じbase commitから作業branchまたはworktreeを作る。
-     - [ ] 推奨branch名は `codex/stream13-firmware`、`codex/stream13-pc-backend`、`codex/stream13-webgui`、統合用は `codex/stream13-orientation-integration` とする。実装branch同士を直接mergeせず、統合branchへ順に取り込む。
-     - [ ] interface lockを変更したくなった場合は、個別branch内で独自判断せず、先にhandoffを更新して3タスクへ周知する。特に `stream_id`、`stream_type`、`payload_format`、payload byte order、field名、scale、CSV列名、Capability stream descriptorは固定契約として扱う。
-     - [ ] 取り込み順は、PC backend -> Firmware -> WebGUIを基本とする。PC backendはsynthetic frame/Capabilityで先にparserとmetadataを固め、Firmware取り込み後にBLE smokeを行い、最後にWebGUIを実backend + 実ブラウザで確認する。
-     - [ ] 最終的な `master` mergeは、統合branchでPC自動テスト、Firmware shield build、flash、BLE smoke、WebGUI実ブラウザ確認が済み、最後にユーザー実機確認が完了してから行う。
+     - [x] まずこのhandoffの `stream_id=13` interface lockを正とし、docs-onlyの準備commitを共通baseへ入れる。その後、Firmware / PC backend / WebGUIの各チャットは同じbase commitから作業branchまたはworktreeを作る。
+     - [x] 推奨branch名は `codex/stream13-firmware`、`codex/stream13-pc-backend`、`codex/stream13-webgui`、統合用は `codex/stream13-orientation-integration` とする。実装branch同士を直接mergeせず、統合branchへ順に取り込む。
+     - [x] interface lockを変更したくなった場合は、個別branch内で独自判断せず、先にhandoffを更新して3タスクへ周知する。特に `stream_id`、`stream_type`、`payload_format`、payload byte order、field名、scale、CSV列名、Capability stream descriptorは固定契約として扱う。
+     - [x] 取り込み順は、PC backend -> Firmware -> WebGUIを基本とする。PC backendはsynthetic frame/Capabilityで先にparserとmetadataを固め、Firmware取り込み後にBLE smokeを行い、最後にWebGUIを実backend + 実ブラウザで確認する。
+     - [x] 最終的な `master` mergeは、統合branchでPC自動テスト、Firmware shield build、flash、BLE smoke、WebGUI実ブラウザ確認が済み、最後にユーザー実機確認が完了してから行う。
    - `stream_id=13` interface lock:
      - `stream_id`: `13`
      - `stream_type`: `ORIENTATION_MOTION` / enum value `6`
@@ -658,15 +658,16 @@ codex/webgui-capability-driven
      - [x] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
      - [x] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
      - [x] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
-     - [ ] 統合後、実backendからの `/api/capability` と WebSocket sampleで `stream_id=13` の最新値、graph、CSV列、3D cuboidが更新されることを実ブラウザで確認する。
+     - [x] 統合後、実backendからの `/api/capability` と WebSocket sampleで `stream_id=13` の最新値、graph、CSV列、3D cuboidが更新されることを実ブラウザで確認する。
    - 検証task:
-     - [ ] `pc_app/` で `uv run --extra dev pytest` を実行する。PC backend単独では31件pass、Firmware単独では30件pass。統合branchで再実行する。
-     - [ ] Web frontendの構文確認を行う。
-     - [x] Firmware shield buildを行う。
-     - [ ] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6` と `stream_id=13` を確認する。
-     - [ ] BLE smokeで `stream_id=10` と `stream_id=13` のsampleが同じ測定中に流れること、CSVに `s13_*` 列が出ることを確認する。
-     - [ ] WebGUIを実ブラウザで確認し、数値表示、graph、3D cuboidが更新されることをPlaywright screenshotまたは同等の方法で確認する。
+     - [x] `pc_app/` で `uv run --extra dev pytest` を実行する。統合branchで32件pass。
+     - [x] Web frontendの構文確認を行う。`node --check pc_app/web_frontend/app.js` 成功。
+     - [x] Firmware shield buildを行う。`build/stream13-integration` で成功。
+     - [x] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6` と `stream_id=13` を確認する。
+     - [x] BLE smokeで `stream_id=10` と `stream_id=13` のsampleが同じ測定中に流れること、CSVに `s13_*` 列が出ることを確認する。
+     - [x] WebGUIを実ブラウザで確認し、数値表示、graph、3D cuboidが更新されることをPlaywright screenshotまたは同等の方法で確認する。
      - 2026-06-23 `codex/stream13-firmware`で `pc_app` の `uv run --extra dev pytest` は30件成功、Firmware shield buildは `build/firmware-stream13` で成功。`firmware/.env` はこのworktreeに無かったため、NCS v3.2.2 / toolchain `e5f4758bcf` の環境変数をshell内で明示した。
+     - 2026-06-23 `codex/stream13-orientation-integration`で3 worktree成果を取り込み、PC自動テスト32件、Web frontend構文確認、Firmware shield build、flash、BLE smoke、実ブラウザ確認まで完了。`master` / `main` へのmergeはユーザー実機確認後に行う。
 
 2. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
    - Config v4次段候補: `SET_STREAM_ENABLE`、実センサstreamのrate変更、Config Response。

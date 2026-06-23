@@ -33,7 +33,6 @@ SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT = "<hhhhhhh"
 SENSOR_MAG3_SAMPLE_FORMAT = "<hhh"
 SENSOR_HTS221_SAMPLE_FORMAT = "<hh"
 SENSOR_LPS22HB_SAMPLE_FORMAT = "<i"
-SENSOR_DATA_FORMAT = SENSOR_DATA_HEADER_FORMAT + SENSOR_IMU6_SAMPLE_FORMAT[1:]
 CONTROL_FORMAT = "<BBH"
 CONFIG_FORMAT = "<BBBBHH"
 STATUS_FORMAT = "<BBHHHHHHH"
@@ -47,7 +46,7 @@ SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE = struct.calcsize(SENSOR_ORIENTATION_MOTIO
 SENSOR_MAG3_SAMPLE_SIZE = struct.calcsize(SENSOR_MAG3_SAMPLE_FORMAT)
 SENSOR_HTS221_SAMPLE_SIZE = struct.calcsize(SENSOR_HTS221_SAMPLE_FORMAT)
 SENSOR_LPS22HB_SAMPLE_SIZE = struct.calcsize(SENSOR_LPS22HB_SAMPLE_FORMAT)
-SENSOR_DATA_SIZE = struct.calcsize(SENSOR_DATA_FORMAT)
+SENSOR_DATA_SIZE = SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
 CONTROL_SIZE = struct.calcsize(CONTROL_FORMAT)
 CONFIG_SIZE = struct.calcsize(CONFIG_FORMAT)
 STATUS_SIZE = struct.calcsize(STATUS_FORMAT)
@@ -805,6 +804,20 @@ class CapabilityPayload:
                     reserved=0,
                 ),
                 CapabilityStream(
+                    stream_id=STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
+                    stream_type=StreamType.ORIENTATION_MOTION,
+                    channel_count=7,
+                    data_type=StreamDataType.INT16,
+                    unit=StreamUnit.MIXED,
+                    payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
+                    stream_flags=int(StreamFlag.ENABLED_BY_DEFAULT) | int(StreamFlag.MIXED_UNITS),
+                    default_interval_ms=LSM6DSL_INTERVAL_MS,
+                    min_interval_ms=LSM6DSL_INTERVAL_MS,
+                    max_interval_ms=LSM6DSL_INTERVAL_MS,
+                    scale_exponent=-2,
+                    reserved=0,
+                ),
+                CapabilityStream(
                     stream_id=STREAM_ID_HTS221_TEMP_HUMIDITY,
                     stream_type=StreamType.TEMP_HUMIDITY,
                     channel_count=2,
@@ -843,20 +856,6 @@ class CapabilityPayload:
                     default_interval_ms=LSM303AGR_MAG3_INTERVAL_MS,
                     min_interval_ms=LSM303AGR_MAG3_INTERVAL_MS,
                     max_interval_ms=LSM303AGR_MAG3_INTERVAL_MS,
-                    scale_exponent=0,
-                    reserved=0,
-                ),
-                CapabilityStream(
-                    stream_id=STREAM_ID_LSM6DSL_ORIENTATION_MOTION,
-                    stream_type=StreamType.ORIENTATION_MOTION,
-                    channel_count=7,
-                    data_type=StreamDataType.INT16,
-                    unit=StreamUnit.MIXED,
-                    payload_format=PayloadFormat.ORIENTATION_MOTION_INT16_V1,
-                    stream_flags=int(StreamFlag.ENABLED_BY_DEFAULT) | int(StreamFlag.MIXED_UNITS),
-                    default_interval_ms=LSM6DSL_INTERVAL_MS,
-                    min_interval_ms=LSM6DSL_INTERVAL_MS,
-                    max_interval_ms=LSM6DSL_INTERVAL_MS,
                     scale_exponent=0,
                     reserved=0,
                 ),

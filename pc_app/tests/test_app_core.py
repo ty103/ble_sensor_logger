@@ -282,10 +282,10 @@ def test_read_capability_uses_client_payload():
         assert capability.schema_version == 1
         assert capability.streams[0].payload_format.name == "DUMMY_ACCEL3_INT16_V1"
         assert capability.streams[1].payload_format.name == "IMU6_INT16_V1"
-        assert capability.streams[2].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
-        assert capability.streams[3].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
-        assert capability.streams[4].payload_format.name == "MAG3_INT16_V1"
-        assert capability.streams[5].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
+        assert capability.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
+        assert capability.streams[3].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
+        assert capability.streams[4].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
+        assert capability.streams[5].payload_format.name == "MAG3_INT16_V1"
 
     asyncio.run(run())
 

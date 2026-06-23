@@ -37,7 +37,7 @@ def test_payload_sizes_match_spec():
     assert SENSOR_MAG3_SAMPLE_SIZE == 6
     assert SENSOR_HTS221_SAMPLE_SIZE == 4
     assert SENSOR_LPS22HB_SAMPLE_SIZE == 4
-    assert SENSOR_DATA_SIZE == 24
+    assert SENSOR_DATA_SIZE == 26
     assert CONTROL_SIZE == 4
     assert CONFIG_SIZE == 8
     assert STATUS_SIZE == 16
@@ -295,15 +295,15 @@ def test_capability_round_trip():
     assert parsed.streams[0].payload_format.name == "DUMMY_ACCEL3_INT16_V1"
     assert parsed.streams[1].stream_id == 10
     assert parsed.streams[1].payload_format.name == "IMU6_INT16_V1"
-    assert parsed.streams[2].stream_id == 30
-    assert parsed.streams[2].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
-    assert parsed.streams[3].stream_id == 20
-    assert parsed.streams[3].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
-    assert parsed.streams[4].stream_id == 12
-    assert parsed.streams[4].payload_format.name == "MAG3_INT16_V1"
-    assert parsed.streams[5].stream_id == 13
-    assert parsed.streams[5].stream_type.name == "ORIENTATION_MOTION"
-    assert parsed.streams[5].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
-    assert parsed.streams[5].channel_count == 7
+    assert parsed.streams[2].stream_id == 13
+    assert parsed.streams[2].stream_type.name == "ORIENTATION_MOTION"
+    assert parsed.streams[2].payload_format.name == "ORIENTATION_MOTION_INT16_V1"
+    assert parsed.streams[2].channel_count == 7
+    assert parsed.streams[3].stream_id == 30
+    assert parsed.streams[3].payload_format.name == "HTS221_TEMP_HUMIDITY_INT16_V1"
+    assert parsed.streams[4].stream_id == 20
+    assert parsed.streams[4].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
+    assert parsed.streams[5].stream_id == 12
+    assert parsed.streams[5].payload_format.name == "MAG3_INT16_V1"
     assert parsed.preferred_mtu == SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
     assert parsed.supported_commands & (1 << int(Command.START_MEASUREMENT))

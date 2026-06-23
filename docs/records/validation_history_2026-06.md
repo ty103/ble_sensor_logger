@@ -961,3 +961,49 @@ CONFIG_I2C_LOG_LEVEL_DBG=y
   - Start後 `GET /api/status`: HTTP 200。`latest_sample.stream_id=12` / `payload_format=5` をparseできることを確認。
   - `POST /api/stop`: HTTP 200。
   - Stop後 `GET /api/status`: HTTP 200。
+
+### 2026-06-23: LSM6DSL派生姿勢stream統合検証
+
+対象branch: `codex/stream13-orientation-integration`
+
+目的:
+
+- `codex/stream13-pc-backend`、`codex/stream13-firmware`、`codex/stream13-webgui` の3 worktree成果をhandoff指定順に統合する。
+- LSM6DSL派生姿勢stream `stream_id=13` / `ORIENTATION_MOTION_INT16_V1` をFirmware、PC backend、WebGUIでend-to-end確認する。
+
+統合内容:
+
+- PC backend merge後、Firmware merge、WebGUI mergeの順で統合した。
+- 統合時に `docs/generic_sensor_monitor_design_handoff.md` の衝突を解消し、PC/Firmware/WebGUIそれぞれの単独成果メモを残した。
+- 統合後にPC default Capabilityのstream順をFirmware実機Capability順 `1,10,13,30,20,12` へ合わせ、Sensor Data max size / `preferred_mtu` を26 bytesへ更新した。
+
+確認内容:
+
+- `cd pc_app && uv run --extra dev pytest`
+  - `32 passed`
+- `node --check pc_app/web_frontend/app.js`
+  - 成功
+- `source firmware/.env && west build -b nrf52840dk/nrf52840 firmware --build-dir build/stream13-integration --pristine --shield x_nucleo_iks01a2`
+  - 成功
+  - `.config`: `CONFIG_BT_L2CAP_TX_MTU=247`
+  - `.config`: `CONFIG_BSL_ORIENTATION_FRONT_AXIS="+X"`、`CONFIG_BSL_ORIENTATION_GRAVITY_AXIS="+Z"`
+- `source firmware/.env && west flash --build-dir build/stream13-integration --dev-id 1050278440`
+  - 成功
+- `cd pc_app && uv run python scripts/ble_e2e_smoke.py --name BLE_SENSOR_LOGGER --first-window-s 4 --second-window-s 4`
+  - `preferred_mtu=26`
+  - `streams=6`
+  - Capability stream順: `1 DUMMY_ACCEL3`、`10 IMU6`、`13 ORIENTATION_MOTION`、`30 TEMP_HUMIDITY`、`20 PRESSURE`、`12 MAG3`
+  - first window: `stream_id=10` が99 samples、`stream_id=13` が99 samples
+  - second window: `stream_id=10` が97 samples、`stream_id=13` が96 samples
+  - `latest_orientation_deg` と `accel_norm_mg` を確認
+- 実backend + 実ブラウザ:
+  - `uv run python -m ble_sensor_logger --web --host 127.0.0.1 --port 8765` を起動。
+  - Browserでscanし、`BLE_SENSOR_LOGGER` を検出。
+  - Connect後、実Capability由来の `LSM6DSL Pitch/Roll/Zenith` と `LSM6DSL Accel Norm` の最新値カードを確認。
+  - Start後、`deviceState=MEASURING`、sample増加、orientation readoutが `Filtered` で更新されることを確認。
+  - 3D cuboid canvasは切り出し画像で表示を確認。pixel確認は `418x280` 中 `nonblank=19451`、`colored=8307`。
+  - WebGUI CSV操作は `Recording` から `Saved` まで進むことを確認。実backendの `/api/capability` から生成対象CSV列として `s13_pitch_naive_cdeg`、`s13_roll_naive_cdeg`、`s13_zenith_naive_cdeg`、`s13_pitch_filtered_cdeg`、`s13_roll_filtered_cdeg`、`s13_zenith_filtered_cdeg`、`s13_accel_norm_mg` を確認。
+
+残り条件:
+
+- ユーザー実機確認が完了してから、統合branchを `master` / `main` へmergeする。
