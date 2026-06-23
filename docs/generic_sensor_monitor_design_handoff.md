@@ -597,6 +597,51 @@ codex/webgui-capability-driven
 
 1. LSM6DSL派生姿勢stream `stream_id=13` をFirmware/PC/WebGUIへ追加する。
    - 実装前に、相補フィルタでLSM6DSL gyroを補助入力として使う方針でよいかを確認する。3軸加速度のみを厳密条件にする場合は、filtered pitch/rollの定義をLPF姿勢などへ変更する。
+   - 並行開発前提の進め方:
+     - [ ] まずこのhandoffの `stream_id=13` interface lockを正とし、docs-onlyの準備commitを共通baseへ入れる。その後、Firmware / PC backend / WebGUIの各チャットは同じbase commitから作業branchまたはworktreeを作る。
+     - [ ] 推奨branch名は `codex/stream13-firmware`、`codex/stream13-pc-backend`、`codex/stream13-webgui`、統合用は `codex/stream13-orientation-integration` とする。実装branch同士を直接mergeせず、統合branchへ順に取り込む。
+     - [ ] interface lockを変更したくなった場合は、個別branch内で独自判断せず、先にhandoffを更新して3タスクへ周知する。特に `stream_id`、`stream_type`、`payload_format`、payload byte order、field名、scale、CSV列名、Capability stream descriptorは固定契約として扱う。
+     - [ ] 取り込み順は、PC backend -> Firmware -> WebGUIを基本とする。PC backendはsynthetic frame/Capabilityで先にparserとmetadataを固め、Firmware取り込み後にBLE smokeを行い、最後にWebGUIを実backend + 実ブラウザで確認する。
+     - [ ] 最終的な `master` mergeは、統合branchでPC自動テスト、Firmware shield build、flash、BLE smoke、WebGUI実ブラウザ確認が済み、最後にユーザー実機確認が完了してから行う。
+   - `stream_id=13` interface lock:
+     - `stream_id`: `13`
+     - `stream_type`: `ORIENTATION_MOTION` / enum value `6`
+     - `payload_format`: `ORIENTATION_MOTION_INT16_V1` / enum value `6`
+     - `data_type`: `INT16`
+     - `unit`: `MIXED`
+     - `channel_count`: `7`
+     - `payload_len`: `14`
+     - `rate/default_interval`: LSM6DSL IMU6と同じ26 Hz / `38 ms`
+     - `Capability`: LSM6DSLがreadyな場合のみ `stream_id=10` と一緒に含める。`BSL_CAPABILITY_MAX_STREAMS` は6、`preferred_mtu` は少なくともSensor Data header 12 bytes + payload 14 bytes = 26 bytesを表す値へ更新する。
+     - `Sensor Data`: Little Endian、Sensor Data frame v3 headerは既存通り。payloadは次の順序で固定する。
+
+       ```text
+       int16 pitch_naive_cdeg
+       int16 roll_naive_cdeg
+       int16 zenith_naive_cdeg
+       int16 pitch_filtered_cdeg
+       int16 roll_filtered_cdeg
+       int16 zenith_filtered_cdeg
+       int16 accel_norm_mg
+       ```
+
+     - field名とCSV列名:
+
+       | field | 表示単位 | scale | CSV列 |
+       | --- | --- | ---: | --- |
+       | `pitch_naive_cdeg` | degree | 0.01 | `s13_pitch_naive_cdeg` |
+       | `roll_naive_cdeg` | degree | 0.01 | `s13_roll_naive_cdeg` |
+       | `zenith_naive_cdeg` | degree | 0.01 | `s13_zenith_naive_cdeg` |
+       | `pitch_filtered_cdeg` | degree | 0.01 | `s13_pitch_filtered_cdeg` |
+       | `roll_filtered_cdeg` | degree | 0.01 | `s13_roll_filtered_cdeg` |
+       | `zenith_filtered_cdeg` | degree | 0.01 | `s13_zenith_filtered_cdeg` |
+       | `accel_norm_mg` | mg | 1 | `s13_accel_norm_mg` |
+
+   - 並行作業の担当境界:
+     - Firmware taskは `firmware/` 配下を主に編集し、PC/WebGUIのコードは触らない。必要なinterface変更は上記interface lockに合っているかだけ確認する。
+     - PC backend taskは `pc_app/src/ble_sensor_logger/protocol.py`、`web_api.py`、`ui_shell.py`、BLE smoke script、Python testsを主に編集する。`pc_app/web_frontend/` は触らず、WebGUI用には `/api/capability` のfield metadataとWebSocket sample JSONが正しく出るところまでを責務にする。
+     - WebGUI taskは `pc_app/web_frontend/` を主に編集し、Python backendのprotocol/parserは触らない。開発中はfallback Capabilityまたはfixture sampleで3D表示を確認し、統合後に実backendへ接続して確認する。
+     - `pc_app/tests/test_web_api.py` はPC backendとWebGUIの両方が触りやすいので、PC backend側はAPI JSON/field metadata、WebGUI側はstatic asset/HTML/JS存在確認に範囲を限定する。重複変更が出た場合は統合branchで解消する。
    - Firmware task:
      - [ ] `firmware/src/protocol/protocol.h` / `protocol.c` に `BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION=13`、`BSL_STREAM_TYPE_ORIENTATION_MOTION`、`BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V1`、14 bytes payload、`BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE` 更新、`BSL_CAPABILITY_MAX_STREAMS=6` を追加する。
      - [ ] LSM6DSL sampling pathでIMU6 sampleと同じfetch結果からorientation sampleを生成し、measurement start/stop、sequence reset、availabilityをLSM6DSL streamと同期する。
