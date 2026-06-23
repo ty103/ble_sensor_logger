@@ -534,12 +534,13 @@ Zephyr標準APIを優先する。
 
 ## 16. 互換性方針
 
-現行Protocolはv3である。プロジェクトは試作段階のため、旧Protocol v1/v2との後方互換は捨ててよい方針とする。
+現行Protocolはv3である。プロジェクトは試作段階のため、旧Protocolとの後方互換は持たない方針とする。
 
 方針:
 
 - Service UUIDは現行のまま維持し、payload versionで破壊的変更を扱う。
-- PC backendは旧Sensor Data v1/v2をparseしない。
+- Protocol v4以降は、移行タイミングでFirmware/PC/WebGUIを同時更新し、旧version互換コードは残さない。
+- PC backendは旧Sensor Dataをparseしない。
 - Capabilityは互換modeではなく、現在のstream/payload formatを表すmetadataとして使う。
 - 汎用雛形として成熟した段階で、組織管理の128-bit UUIDや正式なversioning policyを再検討する。
 
@@ -604,110 +605,29 @@ codex/webgui-capability-driven
 
 ### 優先度高
 
-1. LSM6DSL派生姿勢stream `stream_id=13` のIIR拡張とGUI filter設定集約を完了済みとする。
-   - 2026-06-23 `codex/mahony-orientation-stream` で、Firmware/PC/WebGUI/docsを更新し、実機build/flash/BLE smoke/実ブラウザ確認まで完了。
-   - 2026-06-23 `codex/orientation-iir-filter` で、IIR pitch/roll/zenithを追加し、`ORIENTATION_MOTION_INT16_V2` payloadへ更新。PC自動テスト、Web frontend構文確認、Firmware shield build、flash、BLE smokeまで完了。実ブラウザ確認は未実施。
-   - Naive、IIR、相補フィルタ、Mahony filterの4方式を同一 `ORIENTATION_MOTION_INT16_V2` payloadで送る。Mahony yawはmagnetometer補正なしのためdriftし得る。
-   - GUIからConfig v4でIIR cutoff frequency、相補フィルタ `alpha`、Mahony `K_p` / `K_i` をOrientationエリア内で設定変更できる。
-   - 並行開発前提の進め方:
-     - [x] まずこのhandoffの `stream_id=13` interface lockを正とし、docs-onlyの準備commitを共通baseへ入れる。その後、Firmware / PC backend / WebGUIの各チャットは同じbase commitから作業branchまたはworktreeを作る。
-     - [x] 推奨branch名は `codex/stream13-firmware`、`codex/stream13-pc-backend`、`codex/stream13-webgui`、統合用は `codex/stream13-orientation-integration` とする。実装branch同士を直接mergeせず、統合branchへ順に取り込む。
-     - [x] interface lockを変更したくなった場合は、個別branch内で独自判断せず、先にhandoffを更新して3タスクへ周知する。特に `stream_id`、`stream_type`、`payload_format`、payload byte order、field名、scale、CSV列名、Capability stream descriptorは固定契約として扱う。
-     - [x] 取り込み順は、PC backend -> Firmware -> WebGUIを基本とする。PC backendはsynthetic frame/Capabilityで先にparserとmetadataを固め、Firmware取り込み後にBLE smokeを行い、最後にWebGUIを実backend + 実ブラウザで確認する。
-     - [x] 最終的な `master` mergeは、統合branchでPC自動テスト、Firmware shield build、flash、BLE smoke、WebGUI実ブラウザ確認が済み、最後にユーザー実機確認が完了してから行う。
-   - `stream_id=13` interface lock:
-     - `stream_id`: `13`
-     - `stream_type`: `ORIENTATION_MOTION` / enum value `6`
-     - `payload_format`: `ORIENTATION_MOTION_INT16_V2` / enum value `7`
-     - `data_type`: `INT16`
-     - `unit`: `MIXED`
-     - `channel_count`: `14`
-     - `payload_len`: `28`
-     - `rate/default_interval`: LSM6DSL IMU6と同じ26 Hz / `38 ms`
-     - `Capability`: LSM6DSLがreadyな場合のみ `stream_id=10` と一緒に含める。`BSL_CAPABILITY_MAX_STREAMS` は6、`preferred_mtu` は少なくともSensor Data header 12 bytes + payload 28 bytes = 40 bytesを表す値へ更新する。
-     - `Sensor Data`: Little Endian、Sensor Data frame v3 headerは既存通り。payloadは次の順序で固定する。
+1. Sensor Data Protocol v4でバッチ送信へ移行する（後方互換なし、v4一本化）。
+   - 背景:
+     - 現行は1 sample / notifyで、30 ms接続間隔時に必要notify数が約2.24/eventとなり、実効 `C=2` 条件では積み残しが出る可能性がある。
+     - project方針として旧Protocol互換は持たないため、v4へ一括移行する。
+   - v4の最小仕様:
+     - Sensor Data headerに `sample_count` を追加し、同一 `stream_id` の連続sampleを1 notifyへ格納する。
+     - flushは仕様上は `100 ms経過` と `STOP/切断時` の2条件だけを公開する。
+     - `max_samples` は実装内部ガードとして持ち、仕様書では安全装置扱いにする。
+     - 初期ターゲットは高頻度stream（`stream_id=10`, `stream_id=13`）。低頻度streamは `sample_count=1` のままでもv4 frameで送る。
+   - 並行開発前提（次回チャットで「handoffに従って作業を開始」と言われた時の実行計画）:
+     - メインエージェントは開始時にcommit境界を宣言する。
+       - commit境界: 「v4 protocol + Firmware/PC/WebGUI実装 + 自動テスト/実機スモークまで」を1テーマとして完了。
+       - `master` merge条件: v4一本化のdocs更新、PCテスト、Firmware build/flash、BLE smoke、WebGUIシステムテスト、ユーザー実機確認完了。
+     - サブエージェントを3本起動し、メインエージェントがレビュー/統合する。
+       - Firmware agent: `firmware/src/protocol/*` と送信経路のバッチ化、Capability `preferred_mtu` 見直し、切断/停止時flush処理。
+       - PC backend agent: `pc_app/src/ble_sensor_logger/protocol.py` / `web_api.py` / BLE smoke更新、v4 parser/validation、v3分岐削除。
+       - WebGUI/Test agent: `pc_app/web_frontend/` と関連テスト更新、`sample_count>1` の表示整合、システムテストスクリプト整備。
+     - 統合はメインエージェントが実施し、interface差分（header構造、sample_count意味、timestamp/sequence規約）を最終確認して取り込む。
+   - システムテスト方針:
+     - 実機 + `pc_app` のE2Eは、VSCode内蔵ブラウザかChrome headlessの使いやすい方を選ぶ。次回実装時は再現性重視でどちらか一方に固定し、handoffへ記録する。
+     - 期待確認項目: notify頻度低下、欠落検知の悪化なし、WebGUIグラフ/CSV/最新値表示がv4 frameで崩れないこと。
 
-       ```text
-       int16 pitch_naive_cdeg
-       int16 roll_naive_cdeg
-       int16 zenith_naive_cdeg
-       int16 pitch_iir_cdeg
-       int16 roll_iir_cdeg
-       int16 zenith_iir_cdeg
-       int16 pitch_complementary_cdeg
-       int16 roll_complementary_cdeg
-       int16 zenith_complementary_cdeg
-       int16 pitch_mahony_cdeg
-       int16 roll_mahony_cdeg
-       int16 zenith_mahony_cdeg
-       int16 yaw_mahony_cdeg
-       int16 accel_norm_mg
-       ```
-
-     - field名とCSV列名:
-
-       | field | 表示単位 | scale | CSV列 |
-       | --- | --- | ---: | --- |
-       | `pitch_naive_cdeg` | degree | 0.01 | `s13_pitch_naive_cdeg` |
-       | `roll_naive_cdeg` | degree | 0.01 | `s13_roll_naive_cdeg` |
-       | `zenith_naive_cdeg` | degree | 0.01 | `s13_zenith_naive_cdeg` |
-       | `pitch_iir_cdeg` | degree | 0.01 | `s13_pitch_iir_cdeg` |
-       | `roll_iir_cdeg` | degree | 0.01 | `s13_roll_iir_cdeg` |
-       | `zenith_iir_cdeg` | degree | 0.01 | `s13_zenith_iir_cdeg` |
-       | `pitch_complementary_cdeg` | degree | 0.01 | `s13_pitch_complementary_cdeg` |
-       | `roll_complementary_cdeg` | degree | 0.01 | `s13_roll_complementary_cdeg` |
-       | `zenith_complementary_cdeg` | degree | 0.01 | `s13_zenith_complementary_cdeg` |
-       | `pitch_mahony_cdeg` | degree | 0.01 | `s13_pitch_mahony_cdeg` |
-       | `roll_mahony_cdeg` | degree | 0.01 | `s13_roll_mahony_cdeg` |
-       | `zenith_mahony_cdeg` | degree | 0.01 | `s13_zenith_mahony_cdeg` |
-       | `yaw_mahony_cdeg` | degree | 0.01 | `s13_yaw_mahony_cdeg` |
-       | `accel_norm_mg` | mg | 1 | `s13_accel_norm_mg` |
-
-   - 並行作業の担当境界:
-     - Firmware taskは `firmware/` 配下を主に編集し、PC/WebGUIのコードは触らない。必要なinterface変更は上記interface lockに合っているかだけ確認する。
-     - PC backend taskは `pc_app/src/ble_sensor_logger/protocol.py`、`web_api.py`、`ui_shell.py`、BLE smoke script、Python testsを主に編集する。`pc_app/web_frontend/` は触らず、WebGUI用には `/api/capability` のfield metadataとWebSocket sample JSONが正しく出るところまでを責務にする。
-     - WebGUI taskは `pc_app/web_frontend/` を主に編集し、Python backendのprotocol/parserは触らない。開発中はfallback Capabilityまたはfixture sampleで3D表示を確認し、統合後に実backendへ接続して確認する。
-     - `pc_app/tests/test_web_api.py` はPC backendとWebGUIの両方が触りやすいので、PC backend側はAPI JSON/field metadata、WebGUI側はstatic asset/HTML/JS存在確認に範囲を限定する。重複変更が出た場合は統合branchで解消する。
-   - Firmware task:
-     - [x] `firmware/src/protocol/protocol.h` / `protocol.c` に `BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION=13`、`BSL_STREAM_TYPE_ORIENTATION_MOTION`、`BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V2`、28 bytes payload、`BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE` 更新、`BSL_CAPABILITY_MAX_STREAMS=6` を追加する。
-     - [x] LSM6DSL sampling pathでIMU6 sampleと同じfetch結果からorientation sampleを生成し、measurement start/stop、sequence reset、availabilityをLSM6DSL streamと同期する。
-     - [x] KConfigで `CONFIG_BSL_ORIENTATION_FRONT_AXIS` と `CONFIG_BSL_ORIENTATION_GRAVITY_AXIS` を追加し、`+X/-X/+Y/-Y/+Z/-Z` から選べるようにする。同じ物理軸の組み合わせはbuild時またはinit時に拒否する。
-     - [x] naive pitch/roll/zenith、IIR pitch/roll/zenith、complementary pitch/roll/zenith、Mahony pitch/roll/zenith/yaw、`accel_norm_mg` を固定小数点で計算し、int16範囲へclampする。
-     - [x] build/flash/RTTの初動では `firmware/docs/ai_quickstart.md` と `firmware/docs/runbooks/` を参照し、ホーム配下の個人Skillに依存しない。
-     - 2026-06-23 `codex/mahony-orientation-stream`: Firmware側Mahony拡張とConfig setterを追加し、shield build / flash / BLE smokeで確認済み。
-   - PC backend task:
-     - [x] `pc_app/src/ble_sensor_logger/protocol.py` にpayload format、parse/pack、validation、default Capabilityを追加する。
-     - [x] `pc_app/src/ble_sensor_logger/web_api.py` にfield metadataを追加し、角度はdegree表示、合成加速度はmg表示にscaleする。
-     - [x] CUI表示、BLE smoke、protocol/web/app_core pytestを更新する。negative smokeはmalformed write中心のため変更不要。
-     - [x] 2026-06-23: IIR拡張後のsynthetic frame/Capability/APIによるPC自動テストを実施し、`uv run --extra dev pytest` が35件pass。Firmware build、flash、BLE smokeまで完了。
-   - WebGUI task:
-     - [x] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
-     - [x] Naive、IIR、相補フィルタ、Mahony filterの4つの直方体を同時表示できる3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
-     - [x] 3D viewは未接続/未到着時、4方式表示時、方式別表示/非表示切替時の表示状態を持つ。
-     - [x] filter parameter変更UIをOrientationエリアへ集約し、生データのLive表示を折りたたみ可能にする。
-     - [x] 統合後、実backendからの `/api/capability` と WebSocket sampleで `stream_id=13` の最新値、graph、CSV列、3D cuboidが更新されることを実ブラウザで確認する。
-   - 検証task:
-     - [x] `pc_app/` で `uv run --extra dev pytest` を実行する。IIR拡張後に35件pass。
-     - [x] Web frontendの構文確認を行う。`node --check pc_app/web_frontend/app.js` 成功。
-     - [x] Firmware shield buildを行う。`build/orientation-iir` で成功。
-     - [x] nRF52840 DK + X-NUCLEO-IKS01A2へflashし、Capability Readで `streams=6`、`stream_id=13`、`ORIENTATION_MOTION_INT16_V2`、`channels=14` を確認する。
-     - [x] BLE smokeで `stream_id=10` と `stream_id=13` のsampleが同じ測定中に流れること、`pitch_iir_cdeg` / `roll_iir_cdeg` / `zenith_iir_cdeg` がnotify payloadに含まれることを確認する。
-     - [ ] WebGUIを実ブラウザで確認し、数値表示、graph、4方式3D cuboid、Orientation内filter設定、Raw live折りたたみが動くことをPlaywright screenshotまたは同等の方法で確認する。
-     - 2026-06-23 `codex/orientation-iir-filter`でPC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smokeまで完了。実ブラウザ確認は未実施。
-     - 2026-06-23 `codex/mahony-orientation-stream`でPC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smoke、実ブラウザ確認まで完了。`firmware/.env` はこのworktreeに無かったため、`firmware/.env.template` をsourceした。
-
-2. ジャイロ自動キャリブレーション実装完了（`agents/gyro-auto-calibration-firmware`）。
-   - Firmware: 静止検出ベース自動キャリブレーション + Force Calib コマンド
-     - `BSL_COMMAND_FORCE_GYRO_CALIB=0x05`: 即時 bias 反映（5秒静止後にGUIからボタン押し想定）
-     - `BSL_CONFIG_OP_SET_GYRO_CALIB_THRESHOLD=0x06` / `SET_GYRO_CALIB_ALPHA=0x07` / `SET_GYRO_CALIB_WINDOW=0x08` (stream_id=10)
-     - KConfig デフォルト: threshold=50 mdps / alpha=5 permille / window=26 samples (~1 s at 26 Hz)
-     - じわじわ補正: auto-calibは bias を IIR (alpha per sample) で徐々に適用、force calibは即時適用
-   - PC: `force_gyro_calib()` / `set_gyro_calib_params()` 追加、`/api/force-gyro-calib` / `/api/gyro-calib-config` エンドポイント追加
-   - GUI: Still threshold / Bias alpha / Still window 入力 + Apply auto-calib config ボタン + Force Calibボタン追加
-   - PC自動テスト49件パス、Firmware shield build (FLASH 20.40%, RAM 14.32%) 完了
-   - 次作業: `master` merge前に実機 flash / BLE smoke / GUI実ブラウザ確認が必要
-
-3. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
+2. Config v4の次段、Status Notify、Log/Eventの優先順位を再評価する。
    - Config v4次段候補: `SET_STREAM_ENABLE`、実センサstreamのrate変更、Config Response。
    - Status Notify候補: start/stop/config/errorのpush通知。
    - Log/Event候補: optional sensor詳細診断、I2C scan結果、Firmware warning。
@@ -741,7 +661,7 @@ codex/webgui-capability-driven
 
 1. 新Service/Characteristic UUID体系
 2. Capability payload形式の拡張方針（現行schema v1はstream descriptorまで。field metadataがFirmware由来で必要になった時点でschema v2/TLV化を検討する）
-3. Sensor Data frame形式の拡張方針（現行v3 headerからbatching/fragmentationへ進めるか）
+3. Sensor Data Protocol v4 batching仕様の詳細（`sample_count` 定義、flush条件、`max_samples` の実装ガード範囲、fragmentationを入れない前提の上限設計）
 4. stream_idとpayload format idの管理方法。現行は `stream_id=1`, `DUMMY_ACCEL3_INT16_V1`, `stream_id=10`, `IMU6_INT16_V1`, `stream_id=13`, `ORIENTATION_MOTION_INT16_V2`, `stream_id=30`, `HTS221_TEMP_HUMIDITY_INT16_V1`, `stream_id=20`, `LPS22HB_PRESSURE_INT32_V1`, `stream_id=12`, `MAG3_INT16_V1`。
 5. optional sensor未ready時の詳細診断方法。sensor別の最小診断はStatusに実装済みで、今後はI2C scan結果、address候補などをLog/Eventへ出すか検討する
 6. MTU拡張の扱い。現行v3 frameは最大40 bytesである。将来の大きなpayloadではATT MTU拡張を前提にする
