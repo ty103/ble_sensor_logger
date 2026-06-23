@@ -731,5 +731,10 @@ void lsm6dsl_sensor_set_gyro_calib_alpha_permille(uint16_t alpha_permille)
 
 void lsm6dsl_sensor_set_gyro_calib_window_samples(uint16_t window_samples)
 {
+	if (window_samples < 5U) {
+		window_samples = 5U;
+	} else if (window_samples > 260U) {
+		window_samples = 260U;
+	}
 	calib_window_samples = window_samples;
 }
