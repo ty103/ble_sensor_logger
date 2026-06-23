@@ -45,6 +45,25 @@
 
     <section id="metricsGrid" class="metrics-grid" aria-label="Latest sensor values"></section>
 
+    <section class="orientation-section" aria-label="Orientation view">
+      <div class="orientation-toolbar">
+        <div>
+          <h2>Orientation</h2>
+          <p id="orientationState">Waiting for orientation sample</p>
+        </div>
+        <strong id="orientationMode">Waiting</strong>
+      </div>
+      <div class="orientation-layout">
+        <canvas id="orientationCanvas" aria-label="3D orientation cuboid"></canvas>
+        <div class="orientation-readout">
+          <div><span>Pitch</span><strong><span id="orientationPitch">--</span><small>deg</small></strong></div>
+          <div><span>Roll</span><strong><span id="orientationRoll">--</span><small>deg</small></strong></div>
+          <div><span>Zenith</span><strong><span id="orientationZenith">--</span><small>deg</small></strong></div>
+          <div><span>Accel norm</span><strong><span id="orientationAccel">--</span><small>mg</small></strong></div>
+        </div>
+      </div>
+    </section>
+
     <section class="chart-section">
       <div class="chart-toolbar">
         <div>
@@ -153,6 +172,6 @@
 
     <div id="toast" role="status" aria-live="polite"></div>
   </main>
-  <script src="/static/app.js"></script>
+  <script type="module" src="/static/app.js"></script>
 </body>
 </html>

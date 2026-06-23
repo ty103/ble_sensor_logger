@@ -411,6 +411,7 @@ uv run --extra dev \
 - Capability metadataに基づく最新値表示
 - Capability metadataに基づくSignal選択とリアルタイムchart表示。最大3個のgraphを描画でき、各graphは最大3つのSignalを選択できる
 - GraphごとにY軸rangeのAuto/manual指定、X軸rangeのAuto/任意秒数window指定
+- `stream_id=13` のorientation field metadataがある場合の3D cuboid表示。WebGUI fallback Capabilityにはorientation fieldを含めるが、実backendからのlive更新はPC backend/Firmware統合後に確認する
 - 最大5000点のchart履歴
 - CSV記録開始/停止とdownload
 
@@ -422,7 +423,7 @@ timestamp_ms,payload_format,payload_len,<stream-qualified Capability fields...>,
 missed_samples
 ```
 
-`<stream-qualified Capability fields...>` は `/api/capability` の `streams[].fields[]` をstream順に展開した列で、列名は `s<stream_id>_<field>` とする。現行fallbackでは `s1_accel_x_mg`、`s1_accel_y_mg`、`s1_accel_z_mg`、`s10_accel_x_mg`、`s10_accel_y_mg`、`s10_accel_z_mg`、`s10_gyro_x_mdps`、`s10_gyro_y_mdps`、`s10_gyro_z_mdps`、`s30_humidity_centi_percent`、`s30_temperature_centi_c`、`s20_pressure_pa`、`s12_mag_x_ut`、`s12_mag_y_ut`、`s12_mag_z_ut` を含む。sample行と一致しないstreamの値列は空欄にする。CSVは単一wide CSVとしてdownloadし、stream別CSV分割は現時点では行わない。
+`<stream-qualified Capability fields...>` は `/api/capability` の `streams[].fields[]` をstream順に展開した列で、列名は `s<stream_id>_<field>` とする。現行fallbackでは `s1_accel_x_mg`、`s1_accel_y_mg`、`s1_accel_z_mg`、`s10_accel_x_mg`、`s10_accel_y_mg`、`s10_accel_z_mg`、`s10_gyro_x_mdps`、`s10_gyro_y_mdps`、`s10_gyro_z_mdps`、`s13_pitch_naive_cdeg`、`s13_roll_naive_cdeg`、`s13_zenith_naive_cdeg`、`s13_pitch_filtered_cdeg`、`s13_roll_filtered_cdeg`、`s13_zenith_filtered_cdeg`、`s13_accel_norm_mg`、`s30_humidity_centi_percent`、`s30_temperature_centi_c`、`s20_pressure_pa`、`s12_mag_x_ut`、`s12_mag_y_ut`、`s12_mag_z_ut` を含む。sample行と一致しないstreamの値列は空欄にする。CSVは単一wide CSVとしてdownloadし、stream別CSV分割は現時点では行わない。
 
 ## 10. 受け入れ条件
 

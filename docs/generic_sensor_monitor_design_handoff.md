@@ -655,9 +655,10 @@ codex/webgui-capability-driven
      - [x] CUI表示、BLE smoke、protocol/web/app_core pytestを更新する。negative smokeはmalformed write中心のため変更不要。
      - [x] 2026-06-23: `codex/stream13-pc-backend` でsynthetic frame/CapabilityによるPC自動テストを実施し、`uv run --extra dev pytest` が31件pass。Firmware/WebGUI統合と実機BLE smokeは未実施。
    - WebGUI task:
-     - [ ] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
-     - [ ] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
-     - [ ] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
+     - [x] fallback Capability、最新値カード、graph selector、CSV列へorientation fieldsを追加する。
+     - [x] filtered pitch/rollを優先して直方体を回転表示する3D cuboid viewを追加する。3D描画はThree.jsを使い、外部CDNなしで動くようにする。
+     - [x] 3D viewは未接続/未到着時、naive only時、filtered到着時の表示状態を持つ。
+     - [ ] 統合後、実backendからの `/api/capability` と WebSocket sampleで `stream_id=13` の最新値、graph、CSV列、3D cuboidが更新されることを実ブラウザで確認する。
    - 検証task:
      - [ ] `pc_app/` で `uv run --extra dev pytest` を実行する。PC backend単独では31件pass、Firmware単独では30件pass。統合branchで再実行する。
      - [ ] Web frontendの構文確認を行う。
@@ -760,5 +761,6 @@ codex/webgui-capability-driven
 - 2026-06-23: WebGUIのinterval表示を全streamへ広げ、`DUMMY_ACCEL3` はEditable、実センサstreamはFixedとして表示するよう更新。PC自動テストで確認済み。
 - 2026-06-23: LSM6DSL派生姿勢stream `stream_id=13` のPC backend対応を実装。`ORIENTATION_MOTION_INT16_V1` のparse/pack、Capability field metadata、WebSocket sample JSON、CUI表示、BLE smoke出力を追加し、PC自動テスト31件で確認済み。Firmware/WebGUI統合と実機確認は未実施。
 - 2026-06-23: `codex/stream13-firmware` でLSM6DSL派生姿勢stream `stream_id=13` のFirmware実装を追加し、PC自動テスト30件とFirmware shield buildで確認済み。PC backend未対応のためflash / BLE smoke / WebGUI確認は統合branchで行う。
+- 2026-06-23: `stream_id=13` WebGUI taskとして、fallback Capability、最新値/graph/CSVのorientation field、local Three.jsによる3D cuboid viewを追加。統合後の実backend + 実ブラウザ確認は未実施。
 
 過去履歴内の `次作業` は当時のメモであり、現在の優先順位は `現在の残課題 / 次回作業キュー` を正とする。

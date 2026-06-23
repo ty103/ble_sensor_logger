@@ -41,6 +41,7 @@ def test_web_frontend_assets_exist():
     assert (web_root / "index.html").is_file()
     assert (web_root / "styles.css").is_file()
     assert (web_root / "app.js").is_file()
+    assert (web_root / "vendor" / "three.module.min.js").is_file()
 
 
 def test_web_frontend_signals_are_capability_driven():
@@ -59,6 +60,7 @@ def test_web_frontend_signals_are_capability_driven():
     assert "renderCapability(payload.capability, true)" in app_js
     assert "fieldDefinitions = flattenFields(capability)" in app_js
     assert 'id="streamSelect"' in index_html
+    assert 'type="module" src="/static/app.js"' in index_html
     assert "configurableStreams = (capability.streams || []).filter" in app_js
     assert "stream_id: Number(elements.streamSelect.value)" in app_js
     assert "metricId(stream.stream_id, field.field)" in app_js
@@ -75,6 +77,27 @@ def test_web_frontend_signals_are_capability_driven():
     assert "optional_sensors?.lsm6dsl?.error" in app_js
     assert 'id="lsm303agrMagnError"' in index_html
     assert "optional_sensors?.lsm303agr_magn?.error" in app_js
+
+
+def test_web_frontend_has_orientation_view():
+    web_root = Path(__file__).resolve().parents[1] / "web_frontend"
+    index_html = (web_root / "index.html").read_text()
+    app_js = (web_root / "app.js").read_text()
+
+    assert 'id="orientationCanvas"' in index_html
+    assert 'id="orientationMode"' in index_html
+    assert 'id="orientationPitch"' in index_html
+    assert 'id="orientationRoll"' in index_html
+    assert 'id="orientationZenith"' in index_html
+    assert 'id="orientationAccel"' in index_html
+    assert 'from "/static/vendor/three.module.min.js"' in app_js
+    assert "new THREE.WebGLRenderer" in app_js
+    assert "stream_id: 13" in app_js
+    assert 'stream_type: "ORIENTATION_MOTION"' in app_js
+    assert 'field: "pitch_filtered_cdeg"' in app_js
+    assert 'field: "accel_norm_mg"' in app_js
+    assert "orientationAngle(source, \"pitch_filtered_cdeg\", \"pitch_naive_cdeg\")" in app_js
+    assert "updateOrientationView(sample)" in app_js
 
 
 def test_web_frontend_csv_uses_stream_qualified_columns():
