@@ -55,4 +55,11 @@ config BSL_GYRO_CALIB_WINDOW_SAMPLES
 	  bias update is applied. At 26 Hz the default of 26 corresponds to
 	  approximately 1 second.
 
+config BSL_LATENCY_PRIORITY
+	bool "Prefer latency over throughput for Sensor Data"
+	default n
+	help
+	  Disable Sensor Data batching and always emit one sample per frame
+	  (sample_count=1) for all streams while keeping protocol version v4.
+
 endmenu

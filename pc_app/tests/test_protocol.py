@@ -30,14 +30,14 @@ from ble_sensor_logger.protocol import (
 
 
 def test_payload_sizes_match_spec():
-    assert SENSOR_DATA_HEADER_SIZE == 12
+    assert SENSOR_DATA_HEADER_SIZE == 13
     assert SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE == 6
     assert SENSOR_IMU6_SAMPLE_SIZE == 12
     assert SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE == 28
     assert SENSOR_MAG3_SAMPLE_SIZE == 6
     assert SENSOR_HTS221_SAMPLE_SIZE == 4
     assert SENSOR_LPS22HB_SAMPLE_SIZE == 4
-    assert SENSOR_DATA_SIZE == 40
+    assert SENSOR_DATA_SIZE == 125
     assert CONTROL_SIZE == 4
     assert CONFIG_SIZE == 8
     assert STATUS_SIZE == 16
@@ -185,9 +185,60 @@ def test_orientation_motion_sensor_data_round_trip():
     assert SensorDataPayload.unpack(packed) == payload
 
 
+def test_sensor_data_unpack_many_expands_batched_frame():
+    sample1 = SensorDataPayload(
+        version=4,
+        message_type=MessageType.SENSOR_SAMPLE,
+        stream_id=10,
+        flags=0,
+        sequence=100,
+        timestamp_ms=1000,
+        payload_format=PayloadFormat.IMU6_INT16_V1,
+        payload_len=SENSOR_IMU6_SAMPLE_SIZE,
+        sample_count=1,
+        accel_x_mg=1,
+        accel_y_mg=2,
+        accel_z_mg=3,
+        gyro_x_mdps=4,
+        gyro_y_mdps=5,
+        gyro_z_mdps=6,
+    )
+    sample2 = SensorDataPayload(
+        version=4,
+        message_type=MessageType.SENSOR_SAMPLE,
+        stream_id=10,
+        flags=0,
+        sequence=101,
+        timestamp_ms=1038,
+        payload_format=PayloadFormat.IMU6_INT16_V1,
+        payload_len=SENSOR_IMU6_SAMPLE_SIZE,
+        sample_count=1,
+        accel_x_mg=11,
+        accel_y_mg=12,
+        accel_z_mg=13,
+        gyro_x_mdps=14,
+        gyro_y_mdps=15,
+        gyro_z_mdps=16,
+    )
+    packed1 = sample1.pack()
+    packed2 = sample2.pack()
+    batched = (
+        packed1[:11]
+        + bytes([SENSOR_IMU6_SAMPLE_SIZE * 2, 2])
+        + packed1[SENSOR_DATA_HEADER_SIZE:]
+        + packed2[SENSOR_DATA_HEADER_SIZE:]
+    )
+
+    unpacked = SensorDataPayload.unpack_many(batched)
+
+    assert len(unpacked) == 2
+    assert unpacked[0] == sample1
+    assert unpacked[1] == sample2
+
+
 def test_control_round_trip():
     payload = ControlPayload.from_command(Command.START_MEASUREMENT)
-    assert payload.pack() == b"\x03\x01\x00\x00"
+    assert payload.pack() == b"\x04\x01\x00\x00"
     assert ControlPayload.unpack(payload.pack()) == payload
 
 
@@ -352,7 +403,7 @@ def test_capability_round_trip():
     assert parsed.streams[4].payload_format.name == "LPS22HB_PRESSURE_INT32_V1"
     assert parsed.streams[5].stream_id == 12
     assert parsed.streams[5].payload_format.name == "MAG3_INT16_V1"
-    assert parsed.preferred_mtu == SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
+    assert parsed.preferred_mtu == SENSOR_DATA_SIZE
     assert parsed.supported_commands & (1 << int(Command.START_MEASUREMENT))
 
 

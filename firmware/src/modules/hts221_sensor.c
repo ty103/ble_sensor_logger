@@ -50,6 +50,7 @@ static void fill_sample(struct bsl_sensor_data *sample,
 	sample->header.timestamp_ms = platform_uptime_ms();
 	sample->header.payload_format = BSL_PAYLOAD_FORMAT_HTS221_TEMP_HUMIDITY_INT16_V1;
 	sample->header.payload_len = BSL_SENSOR_HTS221_SAMPLE_SIZE;
+	sample->header.sample_count = 1;
 	sample->payload.hts221.humidity_centi_percent = value_to_centi(humidity);
 	sample->payload.hts221.temperature_centi_c = value_to_centi(temperature);
 }

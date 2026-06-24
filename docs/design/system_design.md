@@ -36,7 +36,7 @@ flowchart LR
 
 | 要素 | 責務 |
 | --- | --- |
-| Firmware | センサ取得、Protocol v3 frame生成、GATT Server、Control/Config処理、Status/Capability保持 |
+| Firmware | センサ取得、Protocol v4 frame生成、GATT Server、Control/Config処理、Status/Capability保持 |
 | BLE GATT | DeviceとPC backendの境界。Sensor Data、Control、Config、Status、CapabilityをCharacteristicで分離 |
 | Python BLE client | scan/connect/notify/write/readをbleakで実行 |
 | app_core | UI非依存のuse case、Protocol parse、sequence欠落検出 |
@@ -92,7 +92,7 @@ flowchart TB
 - CUIとWebGUIは同じ `app_core` を使う。
 - BLE payload定義はFirmwareの `protocol.h/.c` とPythonの `protocol.py` で対応させる。
 - FirmwareのBLE callbackはpayload validationとevent発行を行い、重い処理はcontrol側へ寄せる。
-- 現行Protocol v3は固定長binaryであり、Sensor Dataは`stream_id`付きframe、Capabilityは最小schemaとして実装済みである。試作段階のため旧Protocol v1/v2互換は持たない。
+- 現行Protocol v4は固定長binaryであり、Sensor Dataは`stream_id`付きframeに`sample_count`を持つ。Capabilityは最小schemaとして実装済みである。試作段階のため旧Protocol v1/v2互換は持たない。
 
 ## 4. Interface仕様
 
@@ -104,7 +104,7 @@ BLE interfaceの詳細なpayload仕様は `../specs/current_implementation_spec.
 
 | Interface | 方向 | Transport操作 | Payload |
 | --- | --- | --- | --- |
-| Sensor Data | Device -> PC | GATT Notify | `SensorDataPayload v3`, 16-40 bytes |
+| Sensor Data | Device -> PC | GATT Notify | `SensorDataPayload v4`, 17-125 bytes |
 | Control | PC -> Device | GATT Write / Write Without Response | `ControlPayload`, 4 bytes |
 | Config | PC <-> Device | GATT Read / Write | `ConfigPayload v4`, 8 bytes |
 | Status | Device -> PC | GATT Read | `StatusPayload`, 16 bytes |
@@ -112,7 +112,7 @@ BLE interfaceの詳細なpayload仕様は `../specs/current_implementation_spec.
 制約:
 
 - byte orderはLittle Endian。
-- 現行versionは3。
+- 現行versionは4。
 - Sensor DataはNotification購読後に配信される。
 - Capabilityは起動時の実センサavailabilityを反映し、常時 `DUMMY_ACCEL3` を含む。LSM6DSLがreadyな場合は `stream_id=10` と `stream_id=13`、HTS221がreadyな場合は `stream_id=30`、LPS22HBがreadyな場合は `stream_id=20`、LSM303AGR magnetometerがreadyな場合は `stream_id=12` を追加し、現行の最大 `stream_count` は6である。
 - Capability schema v1はFirmwareが返すstream descriptorまでを正とする。WebGUI/CSV向けのfield metadataはPC backendが `payload_format` から補完し、Firmware payloadへfield descriptorを入れる場合はschema v2またはTLV化として別途設計する。
@@ -350,9 +350,9 @@ sequenceDiagram
 
 ## 8. 互換性
 
-- 現行FirmwareはProtocol v3を送信する。
+- 現行FirmwareはProtocol v4を送信する。
 - 試作段階のため、PC backendは旧Protocol v1/v2 Sensor Dataをparseしない。
-- Control、Status、CapabilityはProtocol v3、Config payloadはstream-scoped v4に対応する。
+- Control、Status、Capability、Sensor DataはProtocol v4、Config payloadはstream-scoped v4に対応する。
 - Service UUIDは現行のまま維持し、payload versionで試作段階の破壊的変更を扱う。
 
 ## 9. 設計上の改善候補

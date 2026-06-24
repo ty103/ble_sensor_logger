@@ -50,6 +50,7 @@ static void fill_sample(struct bsl_sensor_data *sample,
 	sample->header.timestamp_ms = platform_uptime_ms();
 	sample->header.payload_format = BSL_PAYLOAD_FORMAT_LPS22HB_PRESSURE_INT32_V1;
 	sample->header.payload_len = BSL_SENSOR_LPS22HB_SAMPLE_SIZE;
+	sample->header.sample_count = 1;
 	sample->payload.lps22hb.pressure_pa = pressure_to_pa(pressure);
 }
 

@@ -13,3 +13,4 @@ twister-out/
 *.elf
 *.map
 *.env
+build*

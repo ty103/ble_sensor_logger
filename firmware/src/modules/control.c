@@ -88,6 +88,7 @@ static bool app_event_handler(const struct app_event_header *aeh)
 			lps22hb_sensor_stop();
 			lsm303agr_magn_sensor_stop();
 			sensor_dummy_stop();
+			(void)ble_service_flush_samples();
 			break;
 		case BSL_COMMAND_REQUEST_STATUS:
 			break;
@@ -167,13 +168,14 @@ static bool app_event_handler(const struct app_event_header *aeh)
 		lps22hb_sensor_stop();
 		lsm303agr_magn_sensor_stop();
 		sensor_dummy_stop();
+		(void)ble_service_flush_samples();
 		publish_status();
 		return false;
 	}
 
 	if (is_sensor_sample_event(aeh)) {
 		const struct sensor_sample_event *event = cast_sensor_sample_event(aeh);
-		(void)ble_service_notify_sample(&event->sample);
+		(void)ble_service_enqueue_sample(&event->sample);
 		return false;
 	}
 

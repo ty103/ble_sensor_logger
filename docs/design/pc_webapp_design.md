@@ -69,7 +69,7 @@ flowchart TB
 | Module | 責務 |
 | --- | --- |
 | `constants.py` | Device name、Service/Characteristic UUID、scan timeout |
-| `protocol.py` | Protocol v3 Sensor Data frame parse、MIXED/IMU6/HTS221/LPS22HB/MAG3 stream-specific payload parse、Control/Config/Status/Capability pack/unpack、enum定義、validation |
+| `protocol.py` | Protocol v4 Sensor Data frame parse（`sample_count` 対応）、MIXED/IMU6/HTS221/LPS22HB/MAG3 stream-specific payload parse、Control/Config/Status/Capability pack/unpack、enum定義、validation |
 | `ble_client.py` | bleak import、scan、connect、disconnect、start/stop notify、GATT write/read |
 | `app_core.py` | UI非依存use case、接続状態、monitoring状態、stream単位のsequence欠落検出 |
 | `ui_shell.py` | terminal commandを`app_core`へ変換し、結果を表示 |
@@ -317,7 +317,7 @@ sequenceDiagram
 
 | Test | 確認内容 |
 | --- | --- |
-| `test_protocol.py` | payload size、pack/unpack、validation、v3 Sensor Data frame parse、IMU6/HTS221/LPS22HB/MAG3/ORIENTATION_MOTION payload parse |
+| `test_protocol.py` | payload size、pack/unpack、validation、v4 Sensor Data frame parse（`sample_count` 対応）、IMU6/HTS221/LPS22HB/MAG3/ORIENTATION_MOTION payload parse |
 | `test_app_core.py` | sample handler、stream単位のsequence欠落検出、ORIENTATION_MOTIONを含むmulti-stream処理 |
 | `test_web_api.py` | 期待route、Capability metadata JSON、payload外fieldをWeb sample JSONで `null` にすること、ORIENTATION_MOTION field metadata |
 

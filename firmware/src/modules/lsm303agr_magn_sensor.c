@@ -52,6 +52,7 @@ static void fill_sample(struct bsl_sensor_data *sample,
 	sample->header.timestamp_ms = platform_uptime_ms();
 	sample->header.payload_format = BSL_PAYLOAD_FORMAT_MAG3_INT16_V1;
 	sample->header.payload_len = BSL_SENSOR_MAG3_SAMPLE_SIZE;
+	sample->header.sample_count = 1;
 	sample->payload.mag3.mag_x_uT = magn_to_uT(&mag[0]);
 	sample->payload.mag3.mag_y_uT = magn_to_uT(&mag[1]);
 	sample->payload.mag3.mag_z_uT = magn_to_uT(&mag[2]);

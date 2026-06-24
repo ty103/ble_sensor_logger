@@ -2,6 +2,7 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from ble_sensor_logger.web_api import WebBackend, create_web_app
 from ble_sensor_logger.protocol import (
@@ -475,6 +476,57 @@ def test_web_sample_json_marks_fields_outside_payload_as_null():
     assert orientation["accel_z_mg"] is None
     assert orientation["mag_z_ut"] is None
     assert orientation["pressure_pa"] is None
+
+
+def test_web_sample_plot_time_uses_device_timestamp_spacing():
+    backend = WebBackend(SlowConnectApp())
+    sample1 = SensorDataPayload(
+        version=4,
+        message_type=MessageType.SENSOR_SAMPLE,
+        stream_id=10,
+        flags=0,
+        sequence=10,
+        timestamp_ms=1000,
+        payload_format=PayloadFormat.IMU6_INT16_V1,
+        payload_len=SENSOR_IMU6_SAMPLE_SIZE,
+        sample_count=1,
+        accel_x_mg=1,
+        accel_y_mg=2,
+        accel_z_mg=3,
+        gyro_x_mdps=4,
+        gyro_y_mdps=5,
+        gyro_z_mdps=6,
+    )
+    sample2 = SensorDataPayload(
+        version=4,
+        message_type=MessageType.SENSOR_SAMPLE,
+        stream_id=10,
+        flags=0,
+        sequence=11,
+        timestamp_ms=1038,
+        payload_format=PayloadFormat.IMU6_INT16_V1,
+        payload_len=SENSOR_IMU6_SAMPLE_SIZE,
+        sample_count=1,
+        accel_x_mg=11,
+        accel_y_mg=12,
+        accel_z_mg=13,
+        gyro_x_mdps=14,
+        gyro_y_mdps=15,
+        gyro_z_mdps=16,
+    )
+
+    with patch("ble_sensor_logger.web_api.time.time", return_value=2.0):
+        backend._on_sample(sample1)
+        first = backend.latest_sample
+        backend._on_sample(sample2)
+        second = backend.latest_sample
+
+    assert first is not None
+    assert second is not None
+    assert first["host_time_ms"] == 2000
+    assert second["host_time_ms"] == 2000
+    assert first["plot_time_ms"] == 2000
+    assert second["plot_time_ms"] == 2038
 
 
 def test_web_app_exposes_gyro_calib_routes():

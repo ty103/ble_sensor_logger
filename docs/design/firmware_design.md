@@ -72,7 +72,7 @@ firmware/src/
 | Module | 責務 | 外部依存 |
 | --- | --- | --- |
 | `main` | 初期化順序の制御 | Zephyr init/log |
-| `protocol` | Protocol v3のC struct、pack/unpack、validation | 標準C |
+| `protocol` | Protocol v4のC struct、pack/unpack、validation | 標準C |
 | `ble_service` | BLE enable、Advertising、GATT Service、Characteristic callback、Notify | Zephyr Bluetooth、App Event Manager |
 | `control` | PC command/config/BLE/sensor eventを処理し、状態とsensor動作を制御 | App Event Manager、各module |
 | `sensor_dummy` | dummy accel3 sample生成、sequence管理、interval反映 | Zephyr workqueue |
@@ -97,7 +97,7 @@ flowchart TB
     Mag["lsm303agr_magn_sensor<br>sample work"]
     SampleEvent["sensor_sample_event"]
     Protocol["protocol<br>pack/unpack"]
-    Notify["ble_service_notify_sample"]
+    Notify["ble_service_enqueue_sample<br>ble_service_flush_samples"]
     Status["ble_service_set_status<br>ble_service_set_config"]
 
     BLECB --> ControlEvent

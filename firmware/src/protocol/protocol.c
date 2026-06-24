@@ -33,6 +33,46 @@ _Static_assert(sizeof(struct bsl_capability_stream) == BSL_CAPABILITY_STREAM_SIZ
 _Static_assert(sizeof(struct bsl_capability) == BSL_CAPABILITY_SIZE,
 	       "unexpected capability payload size");
 
+static uint8_t payload_size_for_stream(uint8_t stream_id, uint8_t payload_format)
+{
+	if (stream_id == BSL_STREAM_ID_DUMMY_ACCEL3 &&
+	    payload_format == BSL_PAYLOAD_FORMAT_DUMMY_ACCEL3_INT16_V1) {
+		return BSL_SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE;
+	}
+	if (stream_id == BSL_STREAM_ID_LSM6DSL_IMU6 &&
+	    payload_format == BSL_PAYLOAD_FORMAT_IMU6_INT16_V1) {
+		return BSL_SENSOR_IMU6_SAMPLE_SIZE;
+	}
+	if (stream_id == BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION &&
+	    payload_format == BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V2) {
+		return BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE;
+	}
+	if (stream_id == BSL_STREAM_ID_LSM303AGR_MAG3 &&
+	    payload_format == BSL_PAYLOAD_FORMAT_MAG3_INT16_V1) {
+		return BSL_SENSOR_MAG3_SAMPLE_SIZE;
+	}
+	if (stream_id == BSL_STREAM_ID_HTS221_TEMP_HUMIDITY &&
+	    payload_format == BSL_PAYLOAD_FORMAT_HTS221_TEMP_HUMIDITY_INT16_V1) {
+		return BSL_SENSOR_HTS221_SAMPLE_SIZE;
+	}
+	if (stream_id == BSL_STREAM_ID_LPS22HB_PRESSURE &&
+	    payload_format == BSL_PAYLOAD_FORMAT_LPS22HB_PRESSURE_INT32_V1) {
+		return BSL_SENSOR_LPS22HB_SAMPLE_SIZE;
+	}
+	return 0U;
+}
+
+static uint8_t max_sample_count_for_stream(uint8_t stream_id)
+{
+	if (stream_id == BSL_STREAM_ID_LSM6DSL_IMU6) {
+		return BSL_SENSOR_BATCH_MAX_SAMPLES_IMU6;
+	}
+	if (stream_id == BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION) {
+		return BSL_SENSOR_BATCH_MAX_SAMPLES_ORIENTATION;
+	}
+	return 1U;
+}
+
 int bsl_sensor_data_pack(const struct bsl_sensor_data *payload, uint8_t *buf, size_t len)
 {
 	size_t frame_size;
@@ -50,39 +90,16 @@ int bsl_sensor_data_pack(const struct bsl_sensor_data *payload, uint8_t *buf, si
 	if (payload->header.message_type != BSL_MESSAGE_TYPE_SENSOR_SAMPLE) {
 		return -EPROTO;
 	}
-	if (payload->header.stream_id == BSL_STREAM_ID_DUMMY_ACCEL3) {
-		if (payload->header.payload_format != BSL_PAYLOAD_FORMAT_DUMMY_ACCEL3_INT16_V1 ||
-		    payload->header.payload_len != BSL_SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE) {
-			return -EPROTO;
-		}
-	} else if (payload->header.stream_id == BSL_STREAM_ID_LSM6DSL_IMU6) {
-		if (payload->header.payload_format != BSL_PAYLOAD_FORMAT_IMU6_INT16_V1 ||
-		    payload->header.payload_len != BSL_SENSOR_IMU6_SAMPLE_SIZE) {
-			return -EPROTO;
-		}
-	} else if (payload->header.stream_id == BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION) {
-		if (payload->header.payload_format !=
-			    BSL_PAYLOAD_FORMAT_ORIENTATION_MOTION_INT16_V2 ||
-		    payload->header.payload_len != BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE) {
-			return -EPROTO;
-		}
-	} else if (payload->header.stream_id == BSL_STREAM_ID_LSM303AGR_MAG3) {
-		if (payload->header.payload_format != BSL_PAYLOAD_FORMAT_MAG3_INT16_V1 ||
-		    payload->header.payload_len != BSL_SENSOR_MAG3_SAMPLE_SIZE) {
-			return -EPROTO;
-		}
-	} else if (payload->header.stream_id == BSL_STREAM_ID_HTS221_TEMP_HUMIDITY) {
-		if (payload->header.payload_format !=
-			    BSL_PAYLOAD_FORMAT_HTS221_TEMP_HUMIDITY_INT16_V1 ||
-		    payload->header.payload_len != BSL_SENSOR_HTS221_SAMPLE_SIZE) {
-			return -EPROTO;
-		}
-	} else if (payload->header.stream_id == BSL_STREAM_ID_LPS22HB_PRESSURE) {
-		if (payload->header.payload_format != BSL_PAYLOAD_FORMAT_LPS22HB_PRESSURE_INT32_V1 ||
-		    payload->header.payload_len != BSL_SENSOR_LPS22HB_SAMPLE_SIZE) {
-			return -EPROTO;
-		}
-	} else {
+	uint8_t sample_size = payload_size_for_stream(payload->header.stream_id,
+						    payload->header.payload_format);
+	uint8_t max_sample_count = max_sample_count_for_stream(payload->header.stream_id);
+	if (sample_size == 0U) {
+		return -EPROTO;
+	}
+	if (payload->header.sample_count == 0U || payload->header.sample_count > max_sample_count) {
+		return -EPROTO;
+	}
+	if (payload->header.payload_len != (uint8_t)(sample_size * payload->header.sample_count)) {
 		return -EPROTO;
 	}
 	memcpy(buf, payload, frame_size);
@@ -91,9 +108,20 @@ int bsl_sensor_data_pack(const struct bsl_sensor_data *payload, uint8_t *buf, si
 
 size_t bsl_sensor_data_size(const struct bsl_sensor_data *payload)
 {
+	uint8_t sample_size;
+	uint8_t max_sample_count;
+
 	if (!payload ||
 	    payload->header.payload_len == 0U ||
 	    payload->header.payload_len > BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE) {
+		return 0U;
+	}
+	sample_size = payload_size_for_stream(payload->header.stream_id,
+					      payload->header.payload_format);
+	max_sample_count = max_sample_count_for_stream(payload->header.stream_id);
+	if (sample_size == 0U || payload->header.sample_count == 0U ||
+	    payload->header.sample_count > max_sample_count ||
+	    payload->header.payload_len != (uint8_t)(sample_size * payload->header.sample_count)) {
 		return 0U;
 	}
 	return BSL_SENSOR_DATA_HEADER_SIZE + payload->header.payload_len;

@@ -164,10 +164,10 @@ class SensorLoggerApp:
         await self.client.write_control(ControlPayload.from_command(command).pack())
 
     def _handle_sensor_data(self, data: bytes) -> None:
-        sample = SensorDataPayload.unpack(data)
-        self._update_sequence_stats(sample.stream_id, sample.sequence)
-        if self._sample_handler is not None:
-            self._sample_handler(sample)
+        for sample in SensorDataPayload.unpack_many(data):
+            self._update_sequence_stats(sample.stream_id, sample.sequence)
+            if self._sample_handler is not None:
+                self._sample_handler(sample)
 
     def _update_sequence_stats(self, stream_id: int, sequence: int) -> None:
         last_sequence = self.state.last_sequences_by_stream.get(stream_id)

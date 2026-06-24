@@ -11,7 +11,8 @@ from enum import IntEnum
 import struct
 
 
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 4
+SUPPORTED_PROTOCOL_VERSIONS = (3, 4)
 CONFIG_VERSION = 4
 MIN_INTERVAL_MS = 20
 MAX_INTERVAL_MS = 10_000
@@ -25,8 +26,9 @@ LSM6DSL_INTERVAL_MS = 38
 LSM303AGR_MAG3_INTERVAL_MS = 100
 LPS22HB_INTERVAL_MS = 1000
 HTS221_INTERVAL_MS = 1000
+SENSOR_BATCH_MAX_SAMPLES_ORIENTATION = 4
 
-SENSOR_DATA_HEADER_FORMAT = "<BBBBHIBB"
+SENSOR_DATA_HEADER_FORMAT = "<BBBBHIBBB"
 SENSOR_DUMMY_ACCEL3_SAMPLE_FORMAT = "<hhh"
 SENSOR_IMU6_SAMPLE_FORMAT = "<hhhhhh"
 SENSOR_ORIENTATION_MOTION_SAMPLE_FORMAT = "<hhhhhhhhhhhhhh"
@@ -46,7 +48,10 @@ SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE = struct.calcsize(SENSOR_ORIENTATION_MOTIO
 SENSOR_MAG3_SAMPLE_SIZE = struct.calcsize(SENSOR_MAG3_SAMPLE_FORMAT)
 SENSOR_HTS221_SAMPLE_SIZE = struct.calcsize(SENSOR_HTS221_SAMPLE_FORMAT)
 SENSOR_LPS22HB_SAMPLE_SIZE = struct.calcsize(SENSOR_LPS22HB_SAMPLE_FORMAT)
-SENSOR_DATA_SIZE = SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
+SENSOR_DATA_SIZE = (
+    SENSOR_DATA_HEADER_SIZE
+    + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE * SENSOR_BATCH_MAX_SAMPLES_ORIENTATION
+)
 CONTROL_SIZE = struct.calcsize(CONTROL_FORMAT)
 CONFIG_SIZE = struct.calcsize(CONFIG_FORMAT)
 STATUS_SIZE = struct.calcsize(STATUS_FORMAT)
@@ -167,6 +172,7 @@ class SensorDataPayload:
     accel_x_mg: int
     accel_y_mg: int
     accel_z_mg: int
+    sample_count: int = 1
     gyro_x_mdps: int = 0
     gyro_y_mdps: int = 0
     gyro_z_mdps: int = 0
@@ -207,6 +213,7 @@ class SensorDataPayload:
             timestamp_ms,
             payload_format_value,
             payload_len,
+            sample_count,
         ) = struct.unpack(SENSOR_DATA_HEADER_FORMAT, raw[:SENSOR_DATA_HEADER_SIZE])
         try:
             message_type = MessageType(message_type_value)
@@ -214,6 +221,8 @@ class SensorDataPayload:
         except ValueError as exc:
             raise ProtocolError("sensor payload contains unknown enum value") from exc
 
+        if sample_count != 1:
+            raise ProtocolError("batched sensor frame is not supported by unpack(); use unpack_many()")
         expected_size = SENSOR_DATA_HEADER_SIZE + payload_len
         if len(raw) != expected_size:
             raise ProtocolError(f"sensor payload length must be {expected_size}, got {len(raw)}")
@@ -237,6 +246,7 @@ class SensorDataPayload:
                 timestamp_ms=timestamp_ms,
                 payload_format=payload_format,
                 payload_len=payload_len,
+                sample_count=sample_count,
                 accel_x_mg=accel_x_mg,
                 accel_y_mg=accel_y_mg,
                 accel_z_mg=accel_z_mg,
@@ -263,6 +273,7 @@ class SensorDataPayload:
                 timestamp_ms=timestamp_ms,
                 payload_format=payload_format,
                 payload_len=payload_len,
+                sample_count=sample_count,
                 accel_x_mg=accel_x_mg,
                 accel_y_mg=accel_y_mg,
                 accel_z_mg=accel_z_mg,
@@ -287,6 +298,7 @@ class SensorDataPayload:
                 timestamp_ms=timestamp_ms,
                 payload_format=payload_format,
                 payload_len=payload_len,
+                sample_count=sample_count,
                 accel_x_mg=0,
                 accel_y_mg=0,
                 accel_z_mg=0,
@@ -308,6 +320,7 @@ class SensorDataPayload:
                 timestamp_ms=timestamp_ms,
                 payload_format=payload_format,
                 payload_len=payload_len,
+                sample_count=sample_count,
                 accel_x_mg=0,
                 accel_y_mg=0,
                 accel_z_mg=0,
@@ -346,6 +359,7 @@ class SensorDataPayload:
                 timestamp_ms=timestamp_ms,
                 payload_format=payload_format,
                 payload_len=payload_len,
+                sample_count=sample_count,
                 accel_x_mg=0,
                 accel_y_mg=0,
                 accel_z_mg=0,
@@ -379,6 +393,7 @@ class SensorDataPayload:
                 timestamp_ms=timestamp_ms,
                 payload_format=payload_format,
                 payload_len=payload_len,
+                sample_count=sample_count,
                 accel_x_mg=0,
                 accel_y_mg=0,
                 accel_z_mg=0,
@@ -388,6 +403,99 @@ class SensorDataPayload:
             raise ProtocolError(f"unsupported payload format: {payload_format}")
         payload._validate_header()
         return payload
+
+    @classmethod
+    def unpack_many(cls, data: bytes | bytearray | memoryview) -> list["SensorDataPayload"]:
+        raw = bytes(data)
+        if len(raw) < SENSOR_DATA_HEADER_SIZE:
+            raise ProtocolError(
+                f"sensor payload length must be at least {SENSOR_DATA_HEADER_SIZE}, got {len(raw)}"
+            )
+        (
+            version,
+            message_type_value,
+            stream_id,
+            flags,
+            sequence,
+            timestamp_ms,
+            payload_format_value,
+            payload_len,
+            sample_count,
+        ) = struct.unpack(SENSOR_DATA_HEADER_FORMAT, raw[:SENSOR_DATA_HEADER_SIZE])
+        if version not in SUPPORTED_PROTOCOL_VERSIONS:
+            raise ProtocolError(f"unsupported protocol version: {version}")
+        try:
+            message_type = MessageType(message_type_value)
+            payload_format = PayloadFormat(payload_format_value)
+        except ValueError as exc:
+            raise ProtocolError("sensor payload contains unknown enum value") from exc
+        if message_type != MessageType.SENSOR_SAMPLE:
+            raise ProtocolError(f"unsupported message type: {message_type}")
+        if sample_count < 1:
+            raise ProtocolError("sample_count must be >= 1")
+        expected_size = SENSOR_DATA_HEADER_SIZE + payload_len
+        if len(raw) != expected_size:
+            raise ProtocolError(f"sensor payload length must be {expected_size}, got {len(raw)}")
+        if sample_count == 1:
+            return [cls.unpack(raw)]
+
+        if payload_len % sample_count != 0:
+            raise ProtocolError(
+                f"payload_len {payload_len} must be divisible by sample_count {sample_count}"
+            )
+        sample_size = payload_len // sample_count
+        expected_sample_size = cls._sample_size_for_payload_format(payload_format)
+        if sample_size != expected_sample_size:
+            raise ProtocolError(
+                f"sample size must be {expected_sample_size}, got {sample_size}"
+            )
+        interval_ms = cls._interval_ms_for_stream(stream_id)
+        payload_raw = raw[SENSOR_DATA_HEADER_SIZE:]
+        samples: list[SensorDataPayload] = []
+        for index in range(sample_count):
+            payload_slice = payload_raw[index * sample_size : (index + 1) * sample_size]
+            sample_header = struct.pack(
+                SENSOR_DATA_HEADER_FORMAT,
+                version,
+                int(message_type),
+                stream_id,
+                flags,
+                (sequence + index) & 0xFFFF,
+                timestamp_ms + (index * interval_ms),
+                int(payload_format),
+                sample_size,
+                1,
+            )
+            samples.append(cls.unpack(sample_header + payload_slice))
+        return samples
+
+    @staticmethod
+    def _sample_size_for_payload_format(payload_format: PayloadFormat) -> int:
+        if payload_format == PayloadFormat.DUMMY_ACCEL3_INT16_V1:
+            return SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE
+        if payload_format == PayloadFormat.IMU6_INT16_V1:
+            return SENSOR_IMU6_SAMPLE_SIZE
+        if payload_format == PayloadFormat.HTS221_TEMP_HUMIDITY_INT16_V1:
+            return SENSOR_HTS221_SAMPLE_SIZE
+        if payload_format == PayloadFormat.MAG3_INT16_V1:
+            return SENSOR_MAG3_SAMPLE_SIZE
+        if payload_format == PayloadFormat.ORIENTATION_MOTION_INT16_V2:
+            return SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE
+        if payload_format == PayloadFormat.LPS22HB_PRESSURE_INT32_V1:
+            return SENSOR_LPS22HB_SAMPLE_SIZE
+        raise ProtocolError(f"unsupported payload format: {payload_format}")
+
+    @staticmethod
+    def _interval_ms_for_stream(stream_id: int) -> int:
+        if stream_id in (STREAM_ID_LSM6DSL_IMU6, STREAM_ID_LSM6DSL_ORIENTATION_MOTION):
+            return LSM6DSL_INTERVAL_MS
+        if stream_id == STREAM_ID_LSM303AGR_MAG3:
+            return LSM303AGR_MAG3_INTERVAL_MS
+        if stream_id == STREAM_ID_LPS22HB_PRESSURE:
+            return LPS22HB_INTERVAL_MS
+        if stream_id == STREAM_ID_HTS221_TEMP_HUMIDITY:
+            return HTS221_INTERVAL_MS
+        return 0
 
     def pack(self) -> bytes:
         self._validate_header()
@@ -401,6 +509,7 @@ class SensorDataPayload:
             self.timestamp_ms,
             int(self.payload_format),
             self.payload_len,
+            self.sample_count,
         )
         if self.payload_format == PayloadFormat.DUMMY_ACCEL3_INT16_V1:
             return header + struct.pack(
@@ -453,10 +562,12 @@ class SensorDataPayload:
         return header + struct.pack(SENSOR_LPS22HB_SAMPLE_FORMAT, self.pressure_pa)
 
     def _validate_header(self) -> None:
-        if self.version != PROTOCOL_VERSION:
+        if self.version not in SUPPORTED_PROTOCOL_VERSIONS:
             raise ProtocolError(f"unsupported protocol version: {self.version}")
         if self.message_type != MessageType.SENSOR_SAMPLE:
             raise ProtocolError(f"unsupported message type: {self.message_type}")
+        if self.sample_count != 1:
+            raise ProtocolError(f"sample_count must be 1 for packed sample, got {self.sample_count}")
         if (
             self.stream_id == STREAM_ID_DUMMY_ACCEL3
             and self.payload_format == PayloadFormat.DUMMY_ACCEL3_INT16_V1
@@ -551,7 +662,7 @@ class ControlPayload:
         if len(raw) != CONTROL_SIZE:
             raise ProtocolError(f"control payload length must be {CONTROL_SIZE}, got {len(raw)}")
         version, command_value, value = struct.unpack(CONTROL_FORMAT, raw)
-        if version != PROTOCOL_VERSION:
+        if version not in SUPPORTED_PROTOCOL_VERSIONS:
             raise ProtocolError(f"unsupported protocol version: {version}")
         try:
             command = Command(command_value)
@@ -564,7 +675,7 @@ class ControlPayload:
         return cls(version=PROTOCOL_VERSION, command=command, value=value)
 
     def pack(self) -> bytes:
-        if self.version != PROTOCOL_VERSION:
+        if self.version not in SUPPORTED_PROTOCOL_VERSIONS:
             raise ProtocolError(f"unsupported protocol version: {self.version}")
         return struct.pack(CONTROL_FORMAT, self.version, int(self.command), self.value)
 
@@ -715,7 +826,7 @@ class StatusPayload:
             lps22hb_error_value,
             lsm303agr_magn_error_value,
         ) = struct.unpack(STATUS_FORMAT, raw)
-        if version != PROTOCOL_VERSION:
+        if version not in SUPPORTED_PROTOCOL_VERSIONS:
             raise ProtocolError(f"unsupported protocol version: {version}")
         try:
             state = DeviceState(state_value)
@@ -739,7 +850,7 @@ class StatusPayload:
         )
 
     def pack(self) -> bytes:
-        if self.version != PROTOCOL_VERSION:
+        if self.version not in SUPPORTED_PROTOCOL_VERSIONS:
             raise ProtocolError(f"unsupported protocol version: {self.version}")
         return struct.pack(
             STATUS_FORMAT,
@@ -848,7 +959,7 @@ class CapabilityPayload:
             supported_features=int(CapabilityFeature.INTERVAL_CONFIG)
             | int(CapabilityFeature.STATUS_READ)
             | int(CapabilityFeature.SENSOR_NOTIFY),
-            preferred_mtu=SENSOR_DATA_HEADER_SIZE + SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE,
+            preferred_mtu=SENSOR_DATA_SIZE,
             streams=(
                 CapabilityStream(
                     stream_id=1,
@@ -955,7 +1066,7 @@ class CapabilityPayload:
             supported_features,
             preferred_mtu,
         ) = struct.unpack(CAPABILITY_HEADER_FORMAT, raw[:CAPABILITY_HEADER_SIZE])
-        if version != PROTOCOL_VERSION:
+        if version not in SUPPORTED_PROTOCOL_VERSIONS:
             raise ProtocolError(f"unsupported protocol version: {version}")
         if schema_version != CAPABILITY_SCHEMA_VERSION:
             raise ProtocolError(f"unsupported capability schema version: {schema_version}")
@@ -983,7 +1094,7 @@ class CapabilityPayload:
         )
 
     def pack(self) -> bytes:
-        if self.version != PROTOCOL_VERSION:
+        if self.version not in SUPPORTED_PROTOCOL_VERSIONS:
             raise ProtocolError(f"unsupported protocol version: {self.version}")
         if self.schema_version != CAPABILITY_SCHEMA_VERSION:
             raise ProtocolError(f"unsupported capability schema version: {self.schema_version}")

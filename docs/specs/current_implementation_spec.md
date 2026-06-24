@@ -25,7 +25,7 @@
 | BLE role | Peripheral / GATT Server |
 | PC backend | Python、bleak、aiohttp |
 | UI | interactive CUI、local WebGUI |
-| Protocol | Little Endian固定長binary、Protocol v3 |
+| Protocol | Little Endian固定長binary、Protocol v4 |
 
 ## 3. 対象範囲
 
@@ -87,31 +87,34 @@
 | --- | --- |
 | byte order | Little Endian |
 | payload長 | 固定長 |
-| 現行version | 3 |
+| 現行version | 4 |
 | 後方互換 | 試作段階のため旧Protocol v1/v2互換は持たない |
 | sequence | `uint16`、stream単位、wrap可能 |
 | timestamp | Device boot後、単位ms |
 
-### 6.2 Sensor Data frame v3
+### 6.2 Sensor Data frame v4
 
 Characteristic: Sensor Data Notification
-サイズ: 16-40 bytes
-Python header struct format: `<BBBBHIBB`
+サイズ: 17-125 bytes
+Python header struct format: `<BBBBHIBBB`
 
-Sensor Dataは12 bytesの共通headerとstream-specific payloadで構成する。現行実装では `stream_id=1` の `DUMMY_ACCEL3` を常時サポートし、X-NUCLEO-IKS01A2上のLSM6DSLがFirmware起動時にreadyになった場合のみ `stream_id=10` の `IMU6` と `stream_id=13` の `ORIENTATION_MOTION`、HTS221がreadyになった場合のみ `stream_id=30` の `TEMP_HUMIDITY`、LPS22HBがreadyになった場合のみ `stream_id=20` の `PRESSURE`、LSM303AGR magnetometerがreadyになった場合のみ `stream_id=12` の `MAG3` をCapabilityへ含め、測定中に通知する。
+Sensor Dataは13 bytesの共通headerとstream-specific payloadで構成する。`sample_count` により同一streamの連続sampleを1 notifyへまとめる。現行実装では `stream_id=10` と `stream_id=13` でbatchingを有効化し、その他streamは `sample_count=1` のまま通知する。`CONFIG_BSL_LATENCY_PRIORITY=y` の場合は全streamで `sample_count=1` を強制し、v4 frameを1 sample/notifyで送る。
 
 Header:
 
 | Offset | Size | 型 | 名称 | 説明 |
 | ---: | ---: | --- | --- | --- |
-| 0 | 1 | uint8 | version | `3` |
+| 0 | 1 | uint8 | version | `4` |
 | 1 | 1 | uint8 | message_type | `1` = SENSOR_SAMPLE |
 | 2 | 1 | uint8 | stream_id | `1` = DUMMY_ACCEL3、`10` = LSM6DSL IMU6、`12` = LSM303AGR MAG3、`13` = LSM6DSL ORIENTATION_MOTION、`20` = LPS22HB PRESSURE、`30` = HTS221 TEMP_HUMIDITY |
 | 3 | 1 | uint8 | flags | 予約。現行では0 |
 | 4 | 2 | uint16 | sequence | stream単位のサンプル連番 |
 | 6 | 4 | uint32 | timestamp_ms | Device boot後ms |
 | 10 | 1 | uint8 | payload_format | `1` = DUMMY_ACCEL3_INT16_V1、`2` = IMU6_INT16_V1、`3` = HTS221_TEMP_HUMIDITY_INT16_V1、`4` = LPS22HB_PRESSURE_INT32_V1、`5` = MAG3_INT16_V1、`7` = ORIENTATION_MOTION_INT16_V2 |
-| 11 | 1 | uint8 | payload_len | payload byte数 |
+| 11 | 1 | uint8 | payload_len | payload byte数（batch payload全体） |
+| 12 | 1 | uint8 | sample_count | payload内sample数 |
+
+以降のpayload tableは `sample_count=1` の1 sampleあたりレイアウトを示す。`sample_count>1` の場合は同じpayloadを連結する。
 
 DUMMY_ACCEL3_INT16_V1 payload:
 
@@ -180,7 +183,7 @@ Python struct format: `<BBH`
 
 | Offset | Size | 型 | 名称 | 説明 |
 | ---: | ---: | --- | --- | --- |
-| 0 | 1 | uint8 | version | `3` |
+| 0 | 1 | uint8 | version | `4` |
 | 1 | 1 | uint8 | command | command enum |
 | 2 | 2 | uint16 | value | 予約。現行commandでは未使用 |
 
@@ -230,7 +233,7 @@ Python struct format: `<BBHHHHHHH`
 
 | Offset | Size | 型 | 名称 | 説明 |
 | ---: | ---: | --- | --- | --- |
-| 0 | 1 | uint8 | version | `3` |
+| 0 | 1 | uint8 | version | `4` |
 | 1 | 1 | uint8 | state | device state enum |
 | 2 | 2 | uint16 | sample_interval_ms | 現在のsample interval |
 | 4 | 2 | uint16 | last_error | device error enum。通常のControl/Config/Notify error、またはoptional sensor errorの代表値 |
@@ -293,7 +296,7 @@ Header:
 | 5 | 1 | uint8 | reserved | `0` |
 | 6 | 2 | uint16 | supported_commands | command値をbit位置にしたbitmask |
 | 8 | 2 | uint16 | supported_features | bit0 interval config、bit1 status read、bit2 sensor notify |
-| 10 | 2 | uint16 | preferred_mtu | 現行ではSensor Data frame v3 max sizeの40 |
+| 10 | 2 | uint16 | preferred_mtu | 現行ではSensor Data frame v4 max sizeの125 |
 
 Stream descriptor共通形式:
 
@@ -454,7 +457,7 @@ missed_samples
 | --- | --- |
 | AC-01 | PCからDevice nameまたはService UUIDでscanできる |
 | AC-02 | PCからconnect/disconnectできる |
-| AC-03 | Sensor Data Notificationを購読し、Protocol v3 16-40 bytes frameをparseできる |
+| AC-03 | Sensor Data Notificationを購読し、Protocol v4 17-125 bytes frame（`sample_count` 含む）をparseできる |
 | AC-04 | 旧Protocol v1/v2 payloadを受け付けない |
 | AC-05 | start/stopでDevice stateがMEASURING/IDLEへ遷移する |
 | AC-06 | `stream_id=1` へ20-10000 msのsampling intervalをConfig v4 Writeできる |

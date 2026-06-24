@@ -2,6 +2,7 @@ import asyncio
 
 from ble_sensor_logger.app_core import SensorLoggerApp
 from ble_sensor_logger.protocol import (
+    SENSOR_DATA_HEADER_SIZE,
     SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE,
     SENSOR_HTS221_SAMPLE_SIZE,
     SENSOR_IMU6_SAMPLE_SIZE,
@@ -52,6 +53,60 @@ def test_sequence_gap_tracking():
 
     assert [sample.sequence for sample in seen] == [1, 2, 5]
     assert app.state.missed_samples == 2
+
+
+def test_sequence_gap_tracking_with_batched_frame():
+    app = SensorLoggerApp(client=FakeClient())
+    seen = []
+    app._sample_handler = seen.append
+
+    sample1 = SensorDataPayload(
+        version=4,
+        message_type=MessageType.SENSOR_SAMPLE,
+        stream_id=10,
+        flags=0,
+        sequence=10,
+        timestamp_ms=1000,
+        payload_format=PayloadFormat.IMU6_INT16_V1,
+        payload_len=SENSOR_IMU6_SAMPLE_SIZE,
+        sample_count=1,
+        accel_x_mg=0,
+        accel_y_mg=0,
+        accel_z_mg=1000,
+        gyro_x_mdps=10,
+        gyro_y_mdps=20,
+        gyro_z_mdps=30,
+    )
+    sample2 = SensorDataPayload(
+        version=4,
+        message_type=MessageType.SENSOR_SAMPLE,
+        stream_id=10,
+        flags=0,
+        sequence=11,
+        timestamp_ms=1038,
+        payload_format=PayloadFormat.IMU6_INT16_V1,
+        payload_len=SENSOR_IMU6_SAMPLE_SIZE,
+        sample_count=1,
+        accel_x_mg=1,
+        accel_y_mg=1,
+        accel_z_mg=1001,
+        gyro_x_mdps=11,
+        gyro_y_mdps=21,
+        gyro_z_mdps=31,
+    )
+    packed1 = sample1.pack()
+    packed2 = sample2.pack()
+    batched = (
+        packed1[:11]
+        + bytes([SENSOR_IMU6_SAMPLE_SIZE * 2, 2])
+        + packed1[SENSOR_DATA_HEADER_SIZE:]
+        + packed2[SENSOR_DATA_HEADER_SIZE:]
+    )
+
+    app._handle_sensor_data(batched)
+
+    assert [sample.sequence for sample in seen] == [10, 11]
+    assert app.state.missed_samples == 0
 
 
 def test_sequence_gap_tracking_is_per_stream():

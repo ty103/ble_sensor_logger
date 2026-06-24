@@ -1,6 +1,7 @@
 #include "ble_service.h"
 
 #include <errno.h>
+#include <string.h>
 #include <app_event_manager.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
@@ -38,6 +39,77 @@ static struct bsl_config current_config;
 static struct bsl_status current_status;
 static struct bsl_capability current_capability;
 static struct k_work_delayable advertising_work;
+static struct k_work_delayable batch_flush_work;
+static struct k_mutex batch_lock;
+
+struct stream_batch_state {
+	bool active;
+	uint16_t first_sequence;
+	uint32_t first_timestamp_ms;
+	uint8_t stream_id;
+	uint8_t flags;
+	uint8_t payload_format;
+	uint8_t sample_size;
+	uint8_t payload_len;
+	uint8_t sample_count;
+	uint8_t payload[BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE];
+};
+
+static struct stream_batch_state imu6_batch;
+static struct stream_batch_state orientation_batch;
+
+static bool stream_supports_batching(uint8_t stream_id)
+{
+#ifdef CONFIG_BSL_LATENCY_PRIORITY
+	ARG_UNUSED(stream_id);
+	return false;
+#else
+	return stream_id == BSL_STREAM_ID_LSM6DSL_IMU6 ||
+	       stream_id == BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION;
+#endif
+}
+
+static uint8_t stream_sample_size(const struct bsl_sensor_data *sample)
+{
+	switch (sample->header.stream_id) {
+	case BSL_STREAM_ID_DUMMY_ACCEL3:
+		return BSL_SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE;
+	case BSL_STREAM_ID_LSM6DSL_IMU6:
+		return BSL_SENSOR_IMU6_SAMPLE_SIZE;
+	case BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION:
+		return BSL_SENSOR_ORIENTATION_MOTION_SAMPLE_SIZE;
+	case BSL_STREAM_ID_LSM303AGR_MAG3:
+		return BSL_SENSOR_MAG3_SAMPLE_SIZE;
+	case BSL_STREAM_ID_HTS221_TEMP_HUMIDITY:
+		return BSL_SENSOR_HTS221_SAMPLE_SIZE;
+	case BSL_STREAM_ID_LPS22HB_PRESSURE:
+		return BSL_SENSOR_LPS22HB_SAMPLE_SIZE;
+	default:
+		return 0U;
+	}
+}
+
+static uint8_t stream_max_batch_samples(uint8_t stream_id)
+{
+	if (stream_id == BSL_STREAM_ID_LSM6DSL_IMU6) {
+		return BSL_SENSOR_BATCH_MAX_SAMPLES_IMU6;
+	}
+	if (stream_id == BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION) {
+		return BSL_SENSOR_BATCH_MAX_SAMPLES_ORIENTATION;
+	}
+	return 1U;
+}
+
+static struct stream_batch_state *batch_state_for_stream(uint8_t stream_id)
+{
+	if (stream_id == BSL_STREAM_ID_LSM6DSL_IMU6) {
+		return &imu6_batch;
+	}
+	if (stream_id == BSL_STREAM_ID_LSM6DSL_ORIENTATION_MOTION) {
+		return &orientation_batch;
+	}
+	return NULL;
+}
 
 static ssize_t read_config(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 			   void *buf, uint16_t len, uint16_t offset)
@@ -222,6 +294,78 @@ static uint16_t first_optional_sensor_error(const struct bsl_status *status)
 	return status->lsm303agr_magn_error;
 }
 
+static int notify_packed_sample(const struct bsl_sensor_data *sample)
+{
+	uint8_t payload[BSL_SENSOR_DATA_SIZE];
+	int err;
+
+	if (!current_conn) {
+		current_status.last_error = BSL_ERROR_NOT_CONNECTED;
+		return -ENOTCONN;
+	}
+	if (!notify_enabled) {
+		current_status.last_error = BSL_ERROR_NOT_SUBSCRIBED;
+		return -EACCES;
+	}
+
+	err = bsl_sensor_data_pack(sample, payload, sizeof(payload));
+	if (err < 0) {
+		return err;
+	}
+
+	return bt_gatt_notify(current_conn, &sensor_svc.attrs[2], payload, (uint16_t)err);
+}
+
+static int flush_batch_state(struct stream_batch_state *state)
+{
+	struct bsl_sensor_data frame;
+
+	if (!state || !state->active) {
+		return 0;
+	}
+
+	memset(&frame, 0, sizeof(frame));
+	frame.header.version = BSL_PROTOCOL_VERSION;
+	frame.header.message_type = BSL_MESSAGE_TYPE_SENSOR_SAMPLE;
+	frame.header.stream_id = state->stream_id;
+	frame.header.flags = state->flags;
+	frame.header.sequence = state->first_sequence;
+	frame.header.timestamp_ms = state->first_timestamp_ms;
+	frame.header.payload_format = state->payload_format;
+	frame.header.payload_len = state->payload_len;
+	frame.header.sample_count = state->sample_count;
+	memcpy(frame.payload.raw, state->payload, state->payload_len);
+
+	state->active = false;
+	state->payload_len = 0U;
+	state->sample_count = 0U;
+	return notify_packed_sample(&frame);
+}
+
+static int flush_all_batches_locked(void)
+{
+	int err = 0;
+	int flush_err;
+
+	flush_err = flush_batch_state(&imu6_batch);
+	if (flush_err && !err) {
+		err = flush_err;
+	}
+	flush_err = flush_batch_state(&orientation_batch);
+	if (flush_err && !err) {
+		err = flush_err;
+	}
+	return err;
+}
+
+static void batch_flush_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	k_mutex_lock(&batch_lock, K_FOREVER);
+	(void)flush_all_batches_locked();
+	k_mutex_unlock(&batch_lock);
+}
+
 static void connected(struct bt_conn *conn, uint8_t err)
 {
 	if (err) {
@@ -245,6 +389,15 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 		current_conn = NULL;
 	}
 	notify_enabled = false;
+	k_work_cancel_delayable(&batch_flush_work);
+	k_mutex_lock(&batch_lock, K_FOREVER);
+	imu6_batch.active = false;
+	imu6_batch.payload_len = 0U;
+	imu6_batch.sample_count = 0U;
+	orientation_batch.active = false;
+	orientation_batch.payload_len = 0U;
+	orientation_batch.sample_count = 0U;
+	k_mutex_unlock(&batch_lock);
 
 	struct ble_disconnected_event *event = new_ble_disconnected_event();
 	event->reason = reason;
@@ -279,6 +432,8 @@ int ble_service_init(void)
 	}
 	current_capability.header.stream_count = stream_count;
 	k_work_init_delayable(&advertising_work, advertising_work_handler);
+	k_work_init_delayable(&batch_flush_work, batch_flush_work_handler);
+	k_mutex_init(&batch_lock);
 	current_status.version = BSL_PROTOCOL_VERSION;
 	current_status.state = BSL_DEVICE_STATE_IDLE;
 	current_status.sample_interval_ms = current_config.sample_interval_ms;
@@ -296,26 +451,103 @@ int ble_service_init(void)
 	return 0;
 }
 
-int ble_service_notify_sample(const struct bsl_sensor_data *sample)
+int ble_service_enqueue_sample(const struct bsl_sensor_data *sample)
 {
-	uint8_t payload[BSL_SENSOR_DATA_SIZE];
-	int err;
+	struct stream_batch_state *state;
+	uint8_t sample_size;
+	uint8_t max_samples;
+	uint16_t expected_sequence;
+	int err = 0;
+	int flush_err;
 
-	if (!current_conn) {
-		current_status.last_error = BSL_ERROR_NOT_CONNECTED;
-		return -ENOTCONN;
+	if (!sample) {
+		return -EINVAL;
 	}
-	if (!notify_enabled) {
-		current_status.last_error = BSL_ERROR_NOT_SUBSCRIBED;
-		return -EACCES;
+	if (sample->header.sample_count != 1U) {
+		return -EINVAL;
 	}
 
-	err = bsl_sensor_data_pack(sample, payload, sizeof(payload));
-	if (err < 0) {
+	sample_size = stream_sample_size(sample);
+	if (sample_size == 0U || sample->header.payload_len != sample_size) {
+		return -EINVAL;
+	}
+
+	if (!stream_supports_batching(sample->header.stream_id)) {
+		return notify_packed_sample(sample);
+	}
+
+	state = batch_state_for_stream(sample->header.stream_id);
+	if (!state) {
+		return notify_packed_sample(sample);
+	}
+
+	max_samples = stream_max_batch_samples(sample->header.stream_id);
+
+	k_mutex_lock(&batch_lock, K_FOREVER);
+	if (!state->active) {
+		state->active = true;
+		state->first_sequence = sample->header.sequence;
+		state->first_timestamp_ms = sample->header.timestamp_ms;
+		state->stream_id = sample->header.stream_id;
+		state->flags = sample->header.flags;
+		state->payload_format = sample->header.payload_format;
+		state->sample_size = sample_size;
+		state->payload_len = sample_size;
+		state->sample_count = 1U;
+		memcpy(state->payload, sample->payload.raw, sample_size);
+		k_work_reschedule(&batch_flush_work, K_MSEC(BSL_SENSOR_BATCH_FLUSH_MS));
+		k_mutex_unlock(&batch_lock);
+		return 0;
+	}
+
+	expected_sequence = (uint16_t)(state->first_sequence + state->sample_count);
+	if (state->payload_format != sample->header.payload_format ||
+	    state->sample_size != sample_size ||
+	    sample->header.sequence != expected_sequence ||
+	    state->sample_count >= max_samples ||
+	    (uint16_t)state->payload_len + sample_size > BSL_SENSOR_DATA_MAX_PAYLOAD_SIZE) {
+		flush_err = flush_batch_state(state);
+		if (flush_err) {
+			err = flush_err;
+		}
+		state->active = true;
+		state->first_sequence = sample->header.sequence;
+		state->first_timestamp_ms = sample->header.timestamp_ms;
+		state->stream_id = sample->header.stream_id;
+		state->flags = sample->header.flags;
+		state->payload_format = sample->header.payload_format;
+		state->sample_size = sample_size;
+		state->payload_len = sample_size;
+		state->sample_count = 1U;
+		memcpy(state->payload, sample->payload.raw, sample_size);
+		k_work_reschedule(&batch_flush_work, K_MSEC(BSL_SENSOR_BATCH_FLUSH_MS));
+		k_mutex_unlock(&batch_lock);
 		return err;
 	}
 
-	return bt_gatt_notify(current_conn, &sensor_svc.attrs[2], payload, (uint16_t)err);
+	memcpy(&state->payload[state->payload_len], sample->payload.raw, sample_size);
+	state->payload_len = (uint8_t)(state->payload_len + sample_size);
+	state->sample_count++;
+	if (state->sample_count >= max_samples) {
+		flush_err = flush_batch_state(state);
+		if (flush_err) {
+			err = flush_err;
+		}
+	}
+	k_work_reschedule(&batch_flush_work, K_MSEC(BSL_SENSOR_BATCH_FLUSH_MS));
+	k_mutex_unlock(&batch_lock);
+	return err;
+}
+
+int ble_service_flush_samples(void)
+{
+	int err;
+
+	k_work_cancel_delayable(&batch_flush_work);
+	k_mutex_lock(&batch_lock, K_FOREVER);
+	err = flush_all_batches_locked();
+	k_mutex_unlock(&batch_lock);
+	return err;
 }
 
 void ble_service_set_status(const struct bsl_status *status)

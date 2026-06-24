@@ -37,6 +37,7 @@ static void sample_work_handler(struct k_work *work)
 	event->sample.header.timestamp_ms = platform_uptime_ms();
 	event->sample.header.payload_format = BSL_PAYLOAD_FORMAT_DUMMY_ACCEL3_INT16_V1;
 	event->sample.header.payload_len = BSL_SENSOR_DUMMY_ACCEL3_SAMPLE_SIZE;
+	event->sample.header.sample_count = 1;
 	event->sample.payload.dummy_accel3.accel_x_mg = wave_value(sequence, 0);
 	event->sample.payload.dummy_accel3.accel_y_mg = wave_value(sequence + 7, 0);
 	event->sample.payload.dummy_accel3.accel_z_mg = wave_value(sequence + 13, 1000);

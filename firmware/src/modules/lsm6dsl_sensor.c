@@ -351,6 +351,7 @@ static void fill_header(struct bsl_sensor_data *sample, uint8_t stream_id,
 	sample->header.timestamp_ms = timestamp_ms;
 	sample->header.payload_format = payload_format;
 	sample->header.payload_len = payload_len;
+	sample->header.sample_count = 1;
 }
 
 static void fill_imu6_sample(struct bsl_sensor_data *sample,

@@ -78,7 +78,7 @@ PC:
 | Status | Read | Device状態、エラー、接続回数など |
 | Capability | Read | 最小stream metadata、対応command/feature |
 
-現行payloadはLittle Endian固定長binaryで、Protocol v3である。Sensor Dataは12 bytes header + stream-specific payloadの16-40 bytes frameで、`stream_id`を持つ。
+現行payloadはLittle Endian固定長binaryで、Protocol v4である。Sensor Dataは13 bytes header + stream-specific payloadの17-125 bytes frameで、`stream_id`を持つ。
 
 ## 4. 合意済みの設計判断
 
@@ -135,7 +135,7 @@ PC:
 最小実装では、`Sensor Data`、`Control`、`Config`、`Status`、`Capability`までを優先し、`Log/Event`はoptionalとしてよい。
 
 2026-06-17時点で、現行Service UUIDのまま `Capability` Read Characteristic
-`12345678-1234-5678-1234-56789abcdef5` を追加した。2026-06-18時点でProtocol v3へ進め、2026-06-21時点では常時有効な `DUMMY_ACCEL3` streamと、readyなoptional sensor streamをSensor Data frame v3で扱う。field単位metadataはPC backendが `payload_format` から補完する。
+`12345678-1234-5678-1234-56789abcdef5` を追加した。2026-06-18時点でProtocol v3へ進め、2026-06-23時点でProtocol v4 batchingへ移行した。常時有効な `DUMMY_ACCEL3` streamと、readyなoptional sensor streamをSensor Data frame v4で扱う。field単位metadataはPC backendが `payload_format` から補完する。
 
 ## 7. Application protocol方針
 
@@ -164,11 +164,11 @@ frame {
 }
 ```
 
-実装済みのSensor Data frame v3:
+実装済みのSensor Data frame v4:
 
 ```text
 header {
-  uint8  version = 3
+  uint8  version = 4
   uint8  message_type = SENSOR_SAMPLE
   uint8  stream_id
   uint8  flags
@@ -176,9 +176,10 @@ header {
   uint32 timestamp_ms
   uint8  payload_format
   uint8  payload_len
+  uint8  sample_count
 }
 payload {
-  stream-specific binary
+  stream-specific binary (sample_count個の連続sample)
 }
 ```
 
@@ -279,7 +280,7 @@ fields:
   int16 gyro_z_mdps
 ```
 
-このpayloadはSensor Data frame v3 header 12 bytesと合わせて24 bytesとなる。現行firmwareはATT MTU拡張を前提にしているため、1 notifyに収まる。
+このpayloadはSensor Data frame v4 header 13 bytesと合わせて25 bytesとなる。現行firmwareはATT MTU拡張を前提にしているため、1 notifyに収まる。
 
 実装時の方針:
 
@@ -290,7 +291,7 @@ fields:
 
 ### 8.4 LSM6DSL派生姿勢stream方針
 
-ウェアラブルデバイスのsleep/sleep解除閾値を検討しやすくするため、LSM6DSLの加速度を基準に、ピッチ角、ロール角、ゼニス角、合成加速度をdevice側で計算し、Sensor Data frame v3の独立streamとしてPCへ送る。
+ウェアラブルデバイスのsleep/sleep解除閾値を検討しやすくするため、LSM6DSLの加速度を基準に、ピッチ角、ロール角、ゼニス角、合成加速度をdevice側で計算し、Sensor Data frame v4の独立streamとしてPCへ送る。
 
 暫定stream案:
 
@@ -317,7 +318,7 @@ fields:
   int16 accel_norm_mg
 ```
 
-角度は0.01 degree単位のcenti-degreeとする。ピッチ/ロール/yawは原則 `-18000..18000`、ゼニスは `0..18000`、合成加速度はmg単位とし、範囲外はint16へclampする。このpayloadはSensor Data frame v3 header 12 bytesと合わせて40 bytesとなる。現行firmwareはATT MTU拡張を前提にしているため、1 notifyに収まる。
+角度は0.01 degree単位のcenti-degreeとする。ピッチ/ロール/yawは原則 `-18000..18000`、ゼニスは `0..18000`、合成加速度はmg単位とし、範囲外はint16へclampする。このpayloadはSensor Data frame v4 header 13 bytesと合わせて41 bytesとなる。現行firmwareはATT MTU拡張を前提にしているため、1 notifyに収まる。
 
 軸定義はKConfigで明示する。最低限、device正面方向と、基準姿勢で重力方向が加速度センサのどの軸に対応するかを `+X/-X/+Y/-Y/+Z/-Z` から選ぶ。
 
@@ -534,7 +535,7 @@ Zephyr標準APIを優先する。
 
 ## 16. 互換性方針
 
-現行Protocolはv3である。プロジェクトは試作段階のため、旧Protocolとの後方互換は持たない方針とする。
+現行Protocolはv4である。プロジェクトは試作段階のため、旧Protocolとの後方互換は持たない方針とする。
 
 方針:
 
@@ -605,7 +606,7 @@ codex/webgui-capability-driven
 
 ### 優先度高
 
-1. Sensor Data Protocol v4でバッチ送信へ移行する（後方互換なし、v4一本化）。
+1. [完了] Sensor Data Protocol v4でバッチ送信へ移行した（後方互換なし、v4一本化）。
    - 背景:
      - 現行は1 sample / notifyで、30 ms接続間隔時に必要notify数が約2.24/eventとなり、実効 `C=2` 条件では積み残しが出る可能性がある。
      - project方針として旧Protocol互換は持たないため、v4へ一括移行する。
@@ -613,7 +614,7 @@ codex/webgui-capability-driven
      - Sensor Data headerに `sample_count` を追加し、同一 `stream_id` の連続sampleを1 notifyへ格納する。
      - flushは仕様上は `100 ms経過` と `STOP/切断時` の2条件だけを公開する。
      - `max_samples` は実装内部ガードとして持ち、仕様書では安全装置扱いにする。
-     - 初期ターゲットは高頻度stream（`stream_id=10`, `stream_id=13`）。低頻度streamは `sample_count=1` のままでもv4 frameで送る。
+     - 高頻度stream（`stream_id=10`, `stream_id=13`）でbatchingを有効化し、低頻度streamは `sample_count=1` のv4 frameで送る実装まで完了。
    - 並行開発前提（次回チャットで「handoffに従って作業を開始」と言われた時の実行計画）:
      - メインエージェントは開始時にcommit境界を宣言する。
        - commit境界: 「v4 protocol + Firmware/PC/WebGUI実装 + 自動テスト/実機スモークまで」を1テーマとして完了。
@@ -664,7 +665,7 @@ codex/webgui-capability-driven
 3. Sensor Data Protocol v4 batching仕様の詳細（`sample_count` 定義、flush条件、`max_samples` の実装ガード範囲、fragmentationを入れない前提の上限設計）
 4. stream_idとpayload format idの管理方法。現行は `stream_id=1`, `DUMMY_ACCEL3_INT16_V1`, `stream_id=10`, `IMU6_INT16_V1`, `stream_id=13`, `ORIENTATION_MOTION_INT16_V2`, `stream_id=30`, `HTS221_TEMP_HUMIDITY_INT16_V1`, `stream_id=20`, `LPS22HB_PRESSURE_INT32_V1`, `stream_id=12`, `MAG3_INT16_V1`。
 5. optional sensor未ready時の詳細診断方法。sensor別の最小診断はStatusに実装済みで、今後はI2C scan結果、address候補などをLog/Eventへ出すか検討する
-6. MTU拡張の扱い。現行v3 frameは最大40 bytesである。将来の大きなpayloadではATT MTU拡張を前提にする
+6. MTU拡張の扱い。現行v4 frameは最大125 bytesである。将来の大きなpayloadではATT MTU拡張を前提にする
 7. fragmentation/reassemblyを初期から入れるか
 8. Config v4を `SET_STREAM_ENABLE`、実センサrate変更、TLV、Config Request/Responseのどれへ拡張するか
 9. Status Notifyのpayload
@@ -678,7 +679,7 @@ codex/webgui-capability-driven
 
 1. Characteristic構成を確定する。`Capability` Readは最小実装済み。
 2. Capabilityの最小schemaを決める。固定長binary schema version `1` として実装済み。
-3. Sensor Data frame headerを決める。Protocol v3として実装済み。
+3. Sensor Data frame headerを決める。Protocol v4（`sample_count` 付き）として実装済み。
 4. LSM6DSL 26 Hz 6軸を最初の代表streamとして実装し、TWIM切り替え後に実機で `stream_id=10` の実データを確認済み。
 5. HTS221 humidity/temperature 1 Hzを低頻度環境streamとして実装し、実機で `stream_id=30` の実データを確認済み。
 6. LPS22HB pressure 1 Hzを低頻度環境streamとして実装し、実機で `stream_id=20` の実データを確認済み。
@@ -699,7 +700,7 @@ codex/webgui-capability-driven
 
 - `Capability`を追加する。schema v1はstream descriptorまで実装済みで、field metadataは当面PC backendが `payload_format` から補完する。
 - `Status`をRead/Notifyにする。
-- `Sensor Data`を`stream_id`付きframeにする。Protocol v3として実装済み。
+- `Sensor Data`を`stream_id`付きframeにする。Protocol v4 batchingとして実装済み。
 - `Config`をstream単位にする。Config v4最小実装として `stream_id=1` のinterval変更は実装済みで、次段はenable/disable、実センサrate変更、Config Responseの優先順位を再評価する。
 - NUS/Serial transportへ載せられるよう、Application protocolをtransport非依存にする。
 - 実センサavailability失敗理由をStatusまたはLog/Eventで読めるようにする。LSM6DSL/HTS221/LPS22HB/LSM303AGR magnetometerのsensor別最小診断はStatusへ追加済み。
@@ -721,5 +722,7 @@ codex/webgui-capability-driven
 - 2026-06-23: `codex/mahony-orientation-stream` でLSM6DSL派生姿勢stream `stream_id=13` をMahony拡張。Naive / 相補フィルタ / Mahony filterのpitch/roll/zenith、Mahony yaw、合成加速度をBLEに載せ、GUIで3方式同時表示・表示切替・filter parameter設定を実装。PC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smoke、実ブラウザ確認まで完了。
 - 2026-06-23: `codex/orientation-iir-filter` で `stream_id=13` を `ORIENTATION_MOTION_INT16_V2` へ更新し、IIR pitch/roll/zenith、IIR cutoff Config、Orientationエリア内filter設定、Raw live折りたたみを追加。PC自動テスト35件、Web frontend構文確認、Firmware shield build、flash、BLE smokeまで完了。
 - 2026-06-23: `agents/gyro-auto-calibration-firmware` でジャイロ自動キャリブレーション実装。静止検出ベースじわじわ補正（threshold/alpha/window をConfig v4で変更可）と Force Calib コマンド（即時補正）をFirmware/PC/GUIへ追加。PC自動テスト49件、Firmware shield build完了。実機確認は未実施。
+- 2026-06-23: `codex/protocol-v4-batching` でSensor Data Protocolをv4へ移行。headerへ `sample_count` を追加し、`stream_id=10` / `stream_id=13` を100ms flush + STOP時flushのbatch送信へ更新、低頻度streamは `sample_count=1` を維持。Capability `preferred_mtu=125` へ更新。PC backendはbatched frameを展開して欠落検知/WebSocket配信を継続。PC自動テスト51件、Firmware build+flash、BLE E2E smoke、Web API実機E2E（scan/connect/capability/start/status/stop/disconnect）まで完了。
+- 2026-06-24: WebGUI時系列グラフのx軸を `host_time_ms` 固定から `plot_time_ms`（device `timestamp_ms` をhost時刻へ補正）優先へ変更し、batch展開時の同時刻プロットによる縦線/不連続を修正。合わせて `CONFIG_BSL_LATENCY_PRIORITY` を追加し、有効時はProtocol v4を維持したまま全streamで `sample_count=1`（1 sample/notify）を強制できるようにした。PC自動テスト52件、実機WebSocket確認でIMU/Orientationとも `plot_time_ms` 重複なしを確認済み。
 
 過去履歴内の `次作業` は当時のメモであり、現在の優先順位は `現在の残課題 / 次回作業キュー` を正とする。

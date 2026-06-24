@@ -138,7 +138,7 @@ const graphConfigs = [
   { enabled: false, metricIds: [], yMode: "auto", yMin: null, yMax: null, xMode: "auto", xSeconds: 30 },
 ];
 const sampleMetadataFields = [
-  "host_time_iso", "host_time_ms", "version", "message_type", "stream_id", "flags",
+  "host_time_iso", "host_time_ms", "plot_time_ms", "version", "message_type", "stream_id", "flags",
   "sequence", "timestamp_ms", "payload_format", "payload_len",
 ];
 const sampleFooterFields = ["missed_samples"];
@@ -655,6 +655,13 @@ function sameSample(left, right) {
     && left?.payload_format === right.payload_format;
 }
 
+function sampleTimeMs(sample) {
+  const plotTime = Number(sample?.plot_time_ms);
+  if (Number.isFinite(plotTime)) return plotTime;
+  const hostTime = Number(sample?.host_time_ms);
+  return Number.isFinite(hostTime) ? hostTime : Date.now();
+}
+
 function scaledNumericValue(sample, definition) {
   const value = numericValue(sample, definition.field, definition.streamId);
   return value === null ? null : value * (definition.scale ?? 1);
@@ -993,7 +1000,7 @@ function graphPointSeries(metrics, xLow, xHigh) {
     metric,
     points: history
       .map((sample) => ({
-        time: Number(sample.host_time_ms),
+        time: sampleTimeMs(sample),
         value: scaledNumericValue(sample, metric),
       }))
       .filter((point) =>
@@ -1008,7 +1015,7 @@ function graphPointSeries(metrics, xLow, xHigh) {
 function selectedPointTimes(metrics) {
   const times = [];
   history.forEach((sample) => {
-    const time = Number(sample.host_time_ms);
+    const time = sampleTimeMs(sample);
     if (!Number.isFinite(time)) return;
     if (metrics.some((metric) => scaledNumericValue(sample, metric) !== null)) times.push(time);
   });
@@ -1017,12 +1024,12 @@ function selectedPointTimes(metrics) {
 
 function xDomain(config, metrics) {
   if (config.xMode === "seconds") {
-    const latest = Number(history.at(-1)?.host_time_ms) || Date.now();
+    const latest = sampleTimeMs(history.at(-1));
     return { low: latest - config.xSeconds * 1000, high: latest };
   }
   const times = selectedPointTimes(metrics);
   if (!times.length) {
-    const latest = Number(history.at(-1)?.host_time_ms) || Date.now();
+    const latest = sampleTimeMs(history.at(-1));
     return { low: latest - 1000, high: latest };
   }
   const low = Math.min(...times);

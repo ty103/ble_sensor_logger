@@ -311,6 +311,8 @@ class WebBackend:
         self.sensor_app.set_disconnect_handler(self._on_disconnect)
         self.websockets: set[web.WebSocketResponse] = set()
         self.latest_sample: dict[str, Any] | None = None
+        self.device_time_offset_ms: int | None = None
+        self.last_device_timestamp_ms: int | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self.connecting = False
         self.connection_task: asyncio.Task[None] | None = None
@@ -478,9 +480,12 @@ class WebBackend:
         return websocket
 
     def _on_sample(self, sample: SensorDataPayload) -> None:
+        host_time_ms = round(time.time() * 1000)
+        plot_time_ms = self._plot_time_ms(sample, host_time_ms)
         self.latest_sample = {
             **self._sample_to_dict(sample),
-            "host_time_ms": round(time.time() * 1000),
+            "host_time_ms": host_time_ms,
+            "plot_time_ms": plot_time_ms,
             "missed_samples": self.sensor_app.state.missed_samples,
         }
         self._schedule_broadcast({"type": "sample", "sample": self.latest_sample})
@@ -494,7 +499,18 @@ class WebBackend:
         return payload
 
     def _on_disconnect(self) -> None:
+        self.device_time_offset_ms = None
+        self.last_device_timestamp_ms = None
         self._schedule_broadcast(self.state_message())
+
+    def _plot_time_ms(self, sample: SensorDataPayload, host_time_ms: int) -> int:
+        timestamp_ms = int(sample.timestamp_ms)
+        if self.last_device_timestamp_ms is not None and timestamp_ms < self.last_device_timestamp_ms:
+            self.device_time_offset_ms = None
+        if self.device_time_offset_ms is None:
+            self.device_time_offset_ms = host_time_ms - timestamp_ms
+        self.last_device_timestamp_ms = timestamp_ms
+        return timestamp_ms + self.device_time_offset_ms
 
     def state_message(self) -> dict[str, Any]:
         return {
