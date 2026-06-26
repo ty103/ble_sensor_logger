@@ -134,6 +134,8 @@ AppCoreは `set_stream_interval(stream_id, interval_ms)` でConfig v4 payloadを
 
 ## 7. HTTP API設計
 
+接続直後のCapability取得からmeasurement開始、Sensor Data配信までのシステム横断フローは `docs/design/system_design.md` の「6.1.1 接続直後のCapability取得とmeasurement開始」を正とする。
+
 HTTP APIの外部仕様は `../specs/current_implementation_spec.md` を正とする。
 
 実装上の方針:

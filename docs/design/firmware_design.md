@@ -189,6 +189,8 @@ stateDiagram-v2
 
 ## 8. Control処理
 
+接続直後のCapability取得からmeasurement開始、Sensor Data配信までのシステム横断フローは `docs/design/system_design.md` の「6.1.1 接続直後のCapability取得とmeasurement開始」を正とする。
+
 ```mermaid
 sequenceDiagram
     participant PC
@@ -225,6 +227,29 @@ Commandごとの処理:
 
 現行Config v4 Writeは `ble_service` のcallbackでpayload長、version、op、stream_id、flags、op-specific value範囲、reservedを検証する。検証成功後、`config_update_event` を発行する。`SET_STREAM_INTERVAL` は `stream_id=1` のDUMMY_ACCEL3 interval、orientation filter opは `stream_id=13` のComplementary alpha、Mahony gain、IIR cutoff frequencyを更新する。
 
+```mermaid
+sequenceDiagram
+  participant PC
+  participant BLE as ble_service
+  participant AEM as App Event Manager
+  participant Control as control
+  participant Sensors as sensor_dummy/lsm6dsl_sensor
+
+  PC->>BLE: GATT Write Config
+  BLE->>BLE: bsl_config_unpack_and_validate()
+  alt valid
+    BLE->>AEM: config_update_event
+    AEM->>Control: event dispatch
+    Control->>Sensors: set_interval / set_filter_param
+    Control->>BLE: ble_service_set_config()
+    Control->>AEM: status_update_event
+    BLE-->>PC: ATT success
+  else invalid
+    BLE->>BLE: current_status.last_error=INVALID_CONFIG
+    BLE-->>PC: ATT error
+  end
+```
+
 `control` は `config_update_event` を受けると以下を行う。
 
 - `SET_STREAM_INTERVAL` では `status.sample_interval_ms` を更新する。
@@ -236,6 +261,26 @@ Commandごとの処理:
 現行v4の最小実装では、`op=SET_STREAM_INTERVAL` と `stream_id=1` のみvalidとし、base/mixed streamのdummy sensor intervalを変更する。`SET_STREAM_ENABLE`、実センサstreamのrate変更、TLV化、Config Request/Responseはv4の実機確認後に再検討する。
 
 ## 10. Sensor処理
+
+```mermaid
+sequenceDiagram
+  participant Control as control
+  participant Sensors as sensor_dummy/lsm6dsl_sensor/hts221_sensor/lps22hb_sensor/lsm303agr_magn_sensor
+  participant AEM as App Event Manager
+  participant BLE as ble_service
+  participant PC
+
+  Control->>Sensors: START_MEASUREMENT
+  loop sensor intervalごと
+    Sensors->>Sensors: sensor_sample_fetch + channel_get
+    Sensors->>AEM: sensor_sample_event
+    AEM->>Control: event dispatch
+    Control->>BLE: ble_service_enqueue_sample()
+    Control->>BLE: ble_service_flush_samples()
+    BLE-->>PC: Notify Sensor Data
+  end
+  Control->>Sensors: STOP_MEASUREMENT
+```
 
 ### 10.1 dummy sensor
 

@@ -240,6 +240,46 @@ sequenceDiagram
     Backend-->>WebGUI: HTTP ok + state connected=true
 ```
 
+### 6.1.1 接続直後のCapability取得とmeasurement開始
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant WebGUI
+    participant Backend
+    participant AppCore
+    participant BleClient
+    participant Device
+
+    User->>WebGUI: Connect
+    WebGUI->>Backend: POST /api/connect
+    Backend->>AppCore: connect(target)
+    AppCore->>BleClient: connect(address)
+    BleClient-->>Device: BLE connection
+    Backend->>AppCore: start_monitoring()
+    AppCore->>BleClient: start_notify(Sensor Data)
+    BleClient-->>Device: CCC Notify enabled
+
+    User->>WebGUI: Capability refresh
+    WebGUI->>Backend: GET /api/capability
+    Backend->>AppCore: read_capability()
+    AppCore->>BleClient: GATT Read Capability
+    BleClient-->>Device: Capability Read
+    Device-->>BleClient: Capability payload
+    BleClient-->>Backend: stream metadata
+    Backend-->>WebGUI: capability JSON
+
+    User->>WebGUI: Start
+    WebGUI->>Backend: POST /api/start
+    Backend->>AppCore: start_measurement()
+    AppCore->>BleClient: write Control START
+    BleClient->>Device: GATT Write Control
+    Device-->>BleClient: Sensor Data Notify
+    BleClient->>AppCore: notification bytes
+    AppCore->>Backend: sample handler
+    Backend-->>WebGUI: WebSocket sample
+```
+
 ### 6.2 Measurement開始とsample配信
 
 ```mermaid
